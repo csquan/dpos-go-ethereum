@@ -32,14 +32,14 @@ func TestCheckCompatible(t *testing.T) {
 		{stored: AllEthashProtocolChanges, new: AllEthashProtocolChanges, head: 0, wantErr: nil},
 		{stored: AllEthashProtocolChanges, new: AllEthashProtocolChanges, head: 100, wantErr: nil},
 		{
-			stored:  &ChainConfig{EIP150Block: big.NewInt(10)},
-			new:     &ChainConfig{EIP150Block: big.NewInt(20)},
+			stored:  &ChainConfig{TerminalTotalDifficulty: big.NewInt(10)},
+			new:     &ChainConfig{TerminalTotalDifficulty: big.NewInt(20)},
 			head:    9,
 			wantErr: nil,
 		},
 		{
 			stored: AllEthashProtocolChanges,
-			new:    &ChainConfig{HomesteadBlock: nil},
+			new:    &ChainConfig{ChainID: nil},
 			head:   3,
 			wantErr: &ConfigCompatError{
 				What:         "Homestead fork block",
@@ -50,7 +50,7 @@ func TestCheckCompatible(t *testing.T) {
 		},
 		{
 			stored: AllEthashProtocolChanges,
-			new:    &ChainConfig{HomesteadBlock: big.NewInt(1)},
+			new:    &ChainConfig{ChainID: big.NewInt(1)},
 			head:   3,
 			wantErr: &ConfigCompatError{
 				What:         "Homestead fork block",
@@ -60,8 +60,8 @@ func TestCheckCompatible(t *testing.T) {
 			},
 		},
 		{
-			stored: &ChainConfig{HomesteadBlock: big.NewInt(30), EIP150Block: big.NewInt(10)},
-			new:    &ChainConfig{HomesteadBlock: big.NewInt(25), EIP150Block: big.NewInt(20)},
+			stored: &ChainConfig{ChainID: big.NewInt(30), TerminalTotalDifficulty: big.NewInt(10)},
+			new:    &ChainConfig{ChainID: big.NewInt(25), TerminalTotalDifficulty: big.NewInt(20)},
 			head:   25,
 			wantErr: &ConfigCompatError{
 				What:         "EIP150 fork block",
@@ -71,14 +71,14 @@ func TestCheckCompatible(t *testing.T) {
 			},
 		},
 		{
-			stored:  &ChainConfig{ConstantinopleBlock: big.NewInt(30)},
-			new:     &ChainConfig{ConstantinopleBlock: big.NewInt(30), PetersburgBlock: big.NewInt(30)},
+			stored:  &ChainConfig{ChainID: big.NewInt(30)},
+			new:     &ChainConfig{ChainID: big.NewInt(30), TerminalTotalDifficulty: big.NewInt(30)},
 			head:    40,
 			wantErr: nil,
 		},
 		{
-			stored: &ChainConfig{ConstantinopleBlock: big.NewInt(30)},
-			new:    &ChainConfig{ConstantinopleBlock: big.NewInt(30), PetersburgBlock: big.NewInt(31)},
+			stored: &ChainConfig{ChainID: big.NewInt(30)},
+			new:    &ChainConfig{ChainID: big.NewInt(30), TerminalTotalDifficulty: big.NewInt(31)},
 			head:   40,
 			wantErr: &ConfigCompatError{
 				What:         "Petersburg fork block",

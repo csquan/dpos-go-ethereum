@@ -24,7 +24,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -145,13 +144,6 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		rnd := common.BigToHash(pre.Env.Random)
 		vmContext.Random = &rnd
 	}
-	// If DAO is supported/enabled, we need to handle it here. In geth 'proper', it's
-	// done in StateProcessor.Process(block, ...), right before transactions are applied.
-	if chainConfig.DAOForkSupport &&
-		chainConfig.DAOForkBlock != nil &&
-		chainConfig.DAOForkBlock.Cmp(new(big.Int).SetUint64(pre.Env.Number)) == 0 {
-		misc.ApplyDAOHardFork(statedb)
-	}
 
 	for i, tx := range txs {
 		msg, err := tx.AsMessage(signer, pre.Env.BaseFee)
@@ -188,11 +180,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		// Receipt:
 		{
 			var root []byte
-			if chainConfig.IsByzantium(vmContext.BlockNumber) {
-				statedb.Finalise(true)
-			} else {
-				root = statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber)).Bytes()
-			}
+			statedb.Finalise(true)
 
 			// Create a new receipt for the transaction, storing the intermediate root and
 			// gas used by the tx.
@@ -222,7 +210,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 
 		txIndex++
 	}
-	statedb.IntermediateRoot(chainConfig.IsEIP158(vmContext.BlockNumber))
+	statedb.IntermediateRoot(true)
 	// Add mining reward?
 	if miningReward > 0 {
 		// Add mining reward. The mining reward may be `0`, which only makes a difference in the cases
@@ -248,7 +236,7 @@ func (pre *Prestate) Apply(vmConfig vm.Config, chainConfig *params.ChainConfig,
 		statedb.AddBalance(pre.Env.Coinbase, minerReward)
 	}
 	// Commit block
-	root, err := statedb.Commit(chainConfig.IsEIP158(vmContext.BlockNumber))
+	root, err := statedb.Commit(true)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not commit state: %v", err)
 		return nil, nil, NewError(ErrorEVM, fmt.Errorf("could not commit state: %v", err))

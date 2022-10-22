@@ -220,6 +220,9 @@ type Config struct {
 func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
+	//if chainconfig.dpos != nil {
+	//	return bacon.new(chainconfig.dpos, db)
+	//}
 	if chainConfig.Clique != nil {
 		engine = clique.New(chainConfig.Clique, db)
 	} else {

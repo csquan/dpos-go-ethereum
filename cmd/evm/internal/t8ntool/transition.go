@@ -246,11 +246,10 @@ func Transition(ctx *cli.Context) error {
 		return NewError(ErrorJson, fmt.Errorf("failed signing transactions: %v", err))
 	}
 	// Sanity check, to not `panic` in state_transition
-	if chainConfig.IsLondon(big.NewInt(int64(prestate.Env.Number))) {
-		if prestate.Env.BaseFee == nil {
-			return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
-		}
+	if prestate.Env.BaseFee == nil {
+		return NewError(ErrorConfig, errors.New("EIP-1559 config but missing 'currentBaseFee' in env section"))
 	}
+
 	isMerged := chainConfig.TerminalTotalDifficulty != nil && chainConfig.TerminalTotalDifficulty.BitLen() == 0
 	env := prestate.Env
 	if isMerged {

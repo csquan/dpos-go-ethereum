@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -298,10 +297,7 @@ func (c *Clique) verifyHeader(chain consensus.ChainHeaderReader, header *types.H
 	if header.GasLimit > params.MaxGasLimit {
 		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
 	}
-	// If all checks passed, validate any special fields for hard forks
-	if err := misc.VerifyForkHashes(chain.Config(), header, false); err != nil {
-		return err
-	}
+
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
 }
@@ -333,18 +329,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 	if header.GasUsed > header.GasLimit {
 		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
-	if !chain.Config().IsLondon(header.Number) {
-		// Verify BaseFee not present before EIP-1559 fork.
-		if header.BaseFee != nil {
-			return fmt.Errorf("invalid baseFee before fork: have %d, want <nil>", header.BaseFee)
-		}
-		if err := misc.VerifyGaslimit(parent.GasLimit, header.GasLimit); err != nil {
-			return err
-		}
-	} else if err := misc.VerifyEip1559Header(chain.Config(), parent, header); err != nil {
-		// Verify the header's EIP-1559 attributes.
-		return err
-	}
+
 	// Retrieve the snapshot needed to verify this header and cache it
 	snap, err := c.snapshot(chain, number-1, header.ParentHash, parents)
 	if err != nil {
@@ -566,7 +551,7 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 // rewards given.
 func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
-	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
+	header.Root = state.IntermediateRoot(true)
 	header.UncleHash = types.CalcUncleHash(nil)
 }
 

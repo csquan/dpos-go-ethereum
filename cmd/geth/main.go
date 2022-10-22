@@ -20,6 +20,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -71,14 +72,6 @@ var (
 		utils.SmartCardDaemonPathFlag,
 		utils.OverrideTerminalTotalDifficulty,
 		utils.OverrideTerminalTotalDifficultyPassed,
-		utils.EthashCacheDirFlag,
-		utils.EthashCachesInMemoryFlag,
-		utils.EthashCachesOnDiskFlag,
-		utils.EthashCachesLockMmapFlag,
-		utils.EthashDatasetDirFlag,
-		utils.EthashDatasetsInMemoryFlag,
-		utils.EthashDatasetsOnDiskFlag,
-		utils.EthashDatasetsLockMmapFlag,
 		utils.TxPoolLocalsFlag,
 		utils.TxPoolNoLocalsFlag,
 		utils.TxPoolJournalFlag,
@@ -124,15 +117,11 @@ var (
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
 		utils.MiningEnabledFlag,
-		utils.MinerThreadsFlag,
-		utils.MinerNotifyFlag,
 		utils.LegacyMinerGasTargetFlag,
 		utils.MinerGasLimitFlag,
 		utils.MinerGasPriceFlag,
 		utils.MinerEtherbaseFlag,
 		utils.MinerExtraDataFlag,
-		utils.MinerRecommitIntervalFlag,
-		utils.MinerNoVerifyFlag,
 		utils.NATFlag,
 		utils.NoDiscoverFlag,
 		utils.DiscoveryV5Flag,
@@ -146,13 +135,11 @@ var (
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,
-		utils.FakePoWFlag,
 		utils.NoCompactionFlag,
 		utils.GpoBlocksFlag,
 		utils.GpoPercentileFlag,
 		utils.GpoMaxGasPriceFlag,
 		utils.GpoIgnoreGasPriceFlag,
-		utils.MinerNotifyFullFlag,
 		utils.IgnoreLegacyReceiptsFlag,
 		configFileFlag,
 	}, utils.NetworkFlags, utils.DatabasePathFlags)
@@ -167,9 +154,6 @@ var (
 		utils.AuthVirtualHostsFlag,
 		utils.JWTSecretFlag,
 		utils.HTTPVirtualHostsFlag,
-		utils.GraphQLEnabledFlag,
-		utils.GraphQLCORSDomainFlag,
-		utils.GraphQLVirtualHostsFlag,
 		utils.HTTPApiFlag,
 		utils.HTTPPathPrefixFlag,
 		utils.WSEnabledFlag,
@@ -275,21 +259,6 @@ func main() {
 func prepare(ctx *cli.Context) {
 	// If we're running a known preset, log it for convenience.
 	switch {
-	case ctx.IsSet(utils.RopstenFlag.Name):
-		log.Info("Starting Geth on Ropsten testnet...")
-
-	case ctx.IsSet(utils.RinkebyFlag.Name):
-		log.Info("Starting Geth on Rinkeby testnet...")
-
-	case ctx.IsSet(utils.GoerliFlag.Name):
-		log.Info("Starting Geth on Görli testnet...")
-
-	case ctx.IsSet(utils.SepoliaFlag.Name):
-		log.Info("Starting Geth on Sepolia testnet...")
-
-	case ctx.IsSet(utils.KilnFlag.Name):
-		log.Info("Starting Geth on Kiln testnet...")
-
 	case ctx.IsSet(utils.DeveloperFlag.Name):
 		log.Info("Starting Geth in ephemeral dev mode...")
 		log.Warn(`You are running Geth in --dev mode. Please note the following:
@@ -314,12 +283,7 @@ func prepare(ctx *cli.Context) {
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
 	if ctx.String(utils.SyncModeFlag.Name) != "light" && !ctx.IsSet(utils.CacheFlag.Name) && !ctx.IsSet(utils.NetworkIdFlag.Name) {
 		// Make sure we're not on any supported preconfigured testnet either
-		if !ctx.IsSet(utils.RopstenFlag.Name) &&
-			!ctx.IsSet(utils.SepoliaFlag.Name) &&
-			!ctx.IsSet(utils.RinkebyFlag.Name) &&
-			!ctx.IsSet(utils.GoerliFlag.Name) &&
-			!ctx.IsSet(utils.KilnFlag.Name) &&
-			!ctx.IsSet(utils.DeveloperFlag.Name) {
+		if !ctx.IsSet(utils.DeveloperFlag.Name) {
 			// Nope, we're really on mainnet. Bump that cache up!
 			log.Info("Bumping default cache on mainnet", "provided", ctx.Int(utils.CacheFlag.Name), "updated", 4096)
 			ctx.Set(utils.CacheFlag.Name, strconv.Itoa(4096))
@@ -448,9 +412,8 @@ func startNode(ctx *cli.Context, stack *node.Node, backend ethapi.Backend, isCon
 		// Set the gas price to the limits from the CLI and start mining
 		gasprice := flags.GlobalBig(ctx, utils.MinerGasPriceFlag.Name)
 		ethBackend.TxPool().SetGasPrice(gasprice)
-		// start mining
-		threads := ctx.Int(utils.MinerThreadsFlag.Name)
-		if err := ethBackend.StartMining(threads); err != nil {
+
+		if err := ethBackend.StartMining(runtime.NumCPU()); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}

@@ -56,7 +56,6 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		signer       = types.MakeSigner(p.config, header.Number)
 	)
 	// Iterate over and process the individual transactions
-	byzantium := p.config.IsByzantium(block.Number())
 	for i, tx := range block.Transactions() {
 		// If block precaching was interrupted, abort
 		if interrupt != nil && atomic.LoadUint32(interrupt) == 1 {
@@ -71,15 +70,8 @@ func (p *statePrefetcher) Prefetch(block *types.Block, statedb *state.StateDB, c
 		if err := precacheTransaction(msg, p.config, gaspool, statedb, header, evm); err != nil {
 			return // Ugh, something went horribly wrong, bail out
 		}
-		// If we're pre-byzantium, pre-load trie nodes for the intermediate root
-		if !byzantium {
-			statedb.IntermediateRoot(true)
-		}
 	}
-	// If were post-byzantium, pre-load trie nodes for the final root hash
-	if byzantium {
-		statedb.IntermediateRoot(true)
-	}
+	statedb.IntermediateRoot(true)
 }
 
 // precacheTransaction attempts to apply a transaction to the given state database

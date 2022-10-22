@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -263,7 +262,7 @@ func (beacon *Beacon) verifyHeader(chain consensus.ChainHeaderReader, header, pa
 		return consensus.ErrInvalidNumber
 	}
 	// Verify the header's EIP-1559 attributes.
-	return misc.VerifyEip1559Header(chain.Config(), parent, header)
+	return nil
 }
 
 // verifyHeaders is similar to verifyHeader, but verifies a batch of headers

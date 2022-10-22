@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -66,10 +65,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs     []*types.Log
 		gp          = new(GasPool).AddGas(block.GasLimit())
 	)
-	// Mutate the block and state according to any hard-fork specs
-	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
-		misc.ApplyDAOHardFork(statedb)
-	}
+
 	blockContext := NewEVMBlockContext(header, p.bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, cfg)
 	// Iterate over and process the individual transactions
@@ -105,11 +101,8 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, author *com
 
 	// Update the state with pending changes.
 	var root []byte
-	if config.IsByzantium(blockNumber) {
-		statedb.Finalise(true)
-	} else {
-		root = statedb.IntermediateRoot(config.IsEIP158(blockNumber)).Bytes()
-	}
+	statedb.Finalise(true)
+
 	*usedGas += result.UsedGas
 
 	// Create a new receipt for the transaction, storing the intermediate root and gas used

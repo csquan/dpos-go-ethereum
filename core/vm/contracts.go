@@ -32,6 +32,8 @@ import (
 	"golang.org/x/crypto/ripemd160"
 )
 
+// FIXME FIXME
+
 // PrecompiledContract is the basic interface for native Go contracts. The implementation
 // requires a deterministic gas count based on the input size of the Run method of the
 // contract.
@@ -127,17 +129,8 @@ func init() {
 }
 
 // ActivePrecompiles returns the precompiles enabled with the current configuration.
-func ActivePrecompiles(rules params.Rules) []common.Address {
-	switch {
-	case rules.IsBerlin:
-		return PrecompiledAddressesBerlin
-	case rules.IsIstanbul:
-		return PrecompiledAddressesIstanbul
-	case rules.IsByzantium:
-		return PrecompiledAddressesByzantium
-	default:
-		return PrecompiledAddressesHomestead
-	}
+func ActivePrecompiles() []common.Address {
+	return PrecompiledAddressesBerlin
 }
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.

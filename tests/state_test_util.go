@@ -188,14 +188,13 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	snaps, statedb := MakePreState(rawdb.NewMemoryDatabase(), t.json.Pre, snapshotter)
 
 	var baseFee *big.Int
-	if config.IsLondon(new(big.Int)) {
-		baseFee = t.json.Env.BaseFee
-		if baseFee == nil {
-			// Retesteth uses `0x10` for genesis baseFee. Therefore, it defaults to
-			// parent - 2 : 0xa as the basefee for 'this' context.
-			baseFee = big.NewInt(0x0a)
-		}
+	baseFee = t.json.Env.BaseFee
+	if baseFee == nil {
+		// Retesteth uses `0x10` for genesis baseFee. Therefore, it defaults to
+		// parent - 2 : 0xa as the basefee for 'this' context.
+		baseFee = big.NewInt(0x0a)
 	}
+
 	post := t.json.Post[subtest.Fork][subtest.Index]
 	msg, err := t.json.Tx.toMessage(post, baseFee)
 	if err != nil {
@@ -221,7 +220,7 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	context.GetHash = vmTestBlockHash
 	context.BaseFee = baseFee
 	context.Random = nil
-	if config.IsLondon(new(big.Int)) && t.json.Env.Random != nil {
+	if t.json.Env.Random != nil {
 		rnd := common.BigToHash(t.json.Env.Random)
 		context.Random = &rnd
 		context.Difficulty = big.NewInt(0)
@@ -241,9 +240,9 @@ func (t *StateTest) RunNoVerify(subtest StateSubtest, vmconfig vm.Config, snapsh
 	//   the coinbase gets no txfee, so isn't created, and thus needs to be touched
 	statedb.AddBalance(block.Coinbase(), new(big.Int))
 	// Commit block
-	statedb.Commit(config.IsEIP158(block.Number()))
+	statedb.Commit(true)
 	// And _now_ get the state root
-	root := statedb.IntermediateRoot(config.IsEIP158(block.Number()))
+	root := statedb.IntermediateRoot(true)
 	return snaps, statedb, root, nil
 }
 

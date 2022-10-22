@@ -194,7 +194,7 @@ func TestGet(t *testing.T) {
 		if i == 1 {
 			return
 		}
-		root, nodes, _ := trie.Commit(false)
+		root, nodes, _ := trie.Commit(true)
 		db.Update(NewWithNodeSet(nodes))
 		trie, _ = New(common.Hash{}, root, db)
 	}
@@ -266,7 +266,7 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals {
 		updateString(trie, val.k, val.v)
 	}
-	exp, nodes, err := trie.Commit(false)
+	exp, nodes, err := trie.Commit(true)
 	if err != nil {
 		t.Fatalf("commit error: %v", err)
 	}

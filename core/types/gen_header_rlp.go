@@ -40,6 +40,7 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.Extra)
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
+	w.WriteBytes(obj.EngineHash[:])
 	_tmp1 := obj.BaseFee != nil
 	if _tmp1 {
 		if obj.BaseFee == nil {

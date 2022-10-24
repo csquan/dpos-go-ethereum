@@ -79,7 +79,7 @@ var (
 		false,
 		nil,
 		nil,
-		new(DposConfig)}
+		new(HarmonyConfig)}
 
 	// AllCliqueProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Clique consensus.
@@ -173,9 +173,9 @@ type ChainConfig struct {
 	TerminalTotalDifficultyPassed bool `json:"terminalTotalDifficultyPassed,omitempty"`
 
 	// Various consensus engines
-	Ethash *EthashConfig `json:"ethash,omitempty"`
-	Clique *CliqueConfig `json:"clique,omitempty"`
-	DPos   *DposConfig   `json:"bacon,omitempty"`
+	Ethash  *EthashConfig  `json:"ethash,omitempty"`
+	Clique  *CliqueConfig  `json:"clique,omitempty"`
+	Harmony *HarmonyConfig `json:"harmony,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -197,14 +197,14 @@ func (c *CliqueConfig) String() string {
 	return "clique"
 }
 
-// DposConfig is the consensus engine configs for delegated proof-of-stake based sealing.
-type DposConfig struct {
+// HarmonyConfig is the consensus engine configs for delegated proof-of-stake based sealing.
+type HarmonyConfig struct {
 	Validators []common.Address `json:"validators"` // Genesis validator list
 }
 
 // String implements the stringer interface, returning the consensus engine details.
-func (d *DposConfig) String() string {
-	return "bacon"
+func (d *HarmonyConfig) String() string {
+	return "harmony"
 }
 
 // String implements the fmt.Stringer interface.
@@ -234,8 +234,8 @@ func (c *ChainConfig) String() string {
 		} else {
 			banner += "Consensus: Beacon (proof-of-stake), merged from Clique (proof-of-authority)\n"
 		}
-	case c.DPos != nil:
-		banner += "Consensus: bacon (delegated proof-of-stake)\n"
+	case c.Harmony != nil:
+		banner += "Consensus: harmony (delegated proof-of-stake)\n"
 	default:
 		banner += "Consensus: unknown\n"
 	}

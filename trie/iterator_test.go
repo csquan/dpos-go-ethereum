@@ -660,7 +660,7 @@ func TestPrefixIterator(t *testing.T) {
 		"do":     "verb",
 	}
 	found := make(map[string]string)
-	it := NewIterator(trie.PrefixIterator([]byte("do")))
+	it := NewIterator(trie.PrefixIterator(nil, []byte("do")))
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -681,7 +681,7 @@ func TestPrefixIterator(t *testing.T) {
 		"dog":  "puppy",
 	}
 	found = make(map[string]string)
-	it = NewIterator(trie.PrefixIterator([]byte("dog")))
+	it = NewIterator(trie.PrefixIterator(nil, []byte("dog")))
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -698,7 +698,7 @@ func TestPrefixIterator(t *testing.T) {
 	}
 
 	found = make(map[string]string)
-	it = NewIterator(trie.PrefixIterator([]byte("test")))
+	it = NewIterator(trie.PrefixIterator(nil, []byte("test")))
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -719,7 +719,7 @@ func TestPrefixIterator(t *testing.T) {
 		"dxracer":                       "chair",
 	}
 	found = make(map[string]string)
-	it = NewIterator(trie.PrefixIterator(nil))
+	it = NewIterator(trie.PrefixIterator(nil, nil))
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}

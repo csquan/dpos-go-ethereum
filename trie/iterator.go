@@ -842,6 +842,8 @@ func (it *prefixIterator) Next(descend bool) bool {
 	if it.nodeIterator.Next(descend) {
 		if it.hasPrefix() {
 			return true
+		} else {
+			return it.Next(true)
 		}
 	}
 	return false

@@ -74,8 +74,6 @@ type Trie struct {
 	// tracer is the tool to track the trie changes.
 	// It will be reset after each commit operation.
 	tracer *tracer
-
-	prefix []byte
 }
 
 // newFlag returns the cache flag value for a newly created node.
@@ -91,7 +89,6 @@ func (t *Trie) Copy() *Trie {
 		unhashed: t.unhashed,
 		db:       t.db,
 		tracer:   t.tracer.copy(),
-		prefix:   t.prefix,
 	}
 }
 
@@ -109,11 +106,11 @@ func New(owner common.Hash, root common.Hash, db *Database) (*Trie, error) {
 		//tracer: newTracer(),
 	}
 	if root != (common.Hash{}) && root != emptyRoot {
-		rootnode, err := trie.resolveHash(root[:], nil)
+		rootNode, err := trie.resolveHash(root[:], nil)
 		if err != nil {
 			return nil, err
 		}
-		trie.root = rootnode
+		trie.root = rootNode
 	}
 	return trie, nil
 }
@@ -124,29 +121,17 @@ func NewEmpty(db *Database) *Trie {
 	return tr
 }
 
-func NewTrieWithPrefix(root common.Hash, prefix []byte, db *Database) (*Trie, error) {
-	trie, err := New(common.Hash{}, root, db)
-	if err != nil {
-		return nil, err
-	}
-	trie.prefix = prefix
-	return trie, nil
-}
-
 // NodeIterator returns an iterator that returns nodes of the trie. Iteration starts at
 // the key after the given start key.
 func (t *Trie) NodeIterator(start []byte) NodeIterator {
-	if t.prefix != nil {
-		start = append(t.prefix, start...)
-	}
 	return newNodeIterator(t, start)
 }
 
 // PrefixIterator returns an iterator that returns nodes of the trie which has the prefix path specificed
 // Iteration starts at the key after the given start key.
-func (t *Trie) PrefixIterator(prefix []byte) NodeIterator {
-	if t.prefix != nil {
-		prefix = append(t.prefix, prefix...)
+func (t *Trie) PrefixIterator(start, prefix []byte) NodeIterator {
+	if start != nil {
+		prefix = append(prefix, start...)
 	}
 	return newPrefixIterator(t, prefix)
 }
@@ -161,13 +146,17 @@ func (t *Trie) Get(key []byte) []byte {
 	return res
 }
 
+func (t *Trie) TryGetWithPrefix(key, prefix []byte) ([]byte, error) {
+	if prefix != nil {
+		key = append(prefix, key...)
+	}
+	return t.TryGet(key)
+}
+
 // TryGet returns the value for key stored in the trie.
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryGet(key []byte) ([]byte, error) {
-	if t.prefix != nil {
-		key = append(t.prefix, key...)
-	}
 	value, newroot, didResolve, err := t.tryGet(t.root, keybytesToHex(key), 0)
 	if err == nil && didResolve {
 		t.root = newroot
@@ -300,6 +289,13 @@ func (t *Trie) Update(key, value []byte) {
 	}
 }
 
+func (t *Trie) TryUpdateWithPrefix(key, value, prefix []byte) error {
+	if prefix != nil {
+		key = append(prefix, key...)
+	}
+	return t.tryUpdate(key, value)
+}
+
 // TryUpdate associates key with value in the trie. Subsequent calls to
 // Get will return value. If value has length zero, any existing value
 // is deleted from the trie and calls to Get will return nil.
@@ -309,9 +305,6 @@ func (t *Trie) Update(key, value []byte) {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
-	if t.prefix != nil {
-		key = append(t.prefix, key...)
-	}
 	return t.tryUpdate(key, value)
 }
 
@@ -422,12 +415,16 @@ func (t *Trie) Delete(key []byte) {
 	}
 }
 
+func (t *Trie) TryDeleteWithPrefix(key, prefix []byte) error {
+	if prefix != nil {
+		key = append(prefix, key...)
+	}
+	return t.TryDelete(key)
+}
+
 // TryDelete removes any existing value for key from the trie.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryDelete(key []byte) error {
-	if t.prefix != nil {
-		key = append(t.prefix, key...)
-	}
 	t.unhashed++
 	k := keybytesToHex(key)
 	_, n, err := t.delete(t.root, nil, k)

@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus/beacon"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/eth/gasprice"
@@ -220,9 +221,9 @@ type Config struct {
 func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, config *ethash.Config, notify []string, noverify bool, db ethdb.Database) consensus.Engine {
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
-	//if chainconfig.dpos != nil {
-	//	return bacon.new(chainconfig.dpos, db)
-	//}
+	if chainConfig.Harmony != nil {
+		return harmony.New(chainConfig.Harmony, db)
+	}
 	if chainConfig.Clique != nil {
 		engine = clique.New(chainConfig.Clique, db)
 	} else {

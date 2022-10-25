@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -31,23 +32,23 @@ func NewTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
 }
 
 func NewContext(db *trie.Database) (*Context, error) {
-	trie, err := NewTrie(common.Hash{}, db)
+	t, err := NewTrie(common.Hash{}, db)
 	if err != nil {
 		return nil, err
 	}
 	return &Context{
-		trie: trie,
+		trie: t,
 		db:   db,
 	}, nil
 }
 
 func NewContextFromHash(db *trie.Database, rootHash common.Hash) (*Context, error) {
-	trie, err := NewTrie(rootHash, db)
+	t, err := NewTrie(rootHash, db)
 	if err != nil {
 		return nil, err
 	}
 	return &Context{
-		trie: trie,
+		trie: t,
 		db:   db,
 	}, nil
 }

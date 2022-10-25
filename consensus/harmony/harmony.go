@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"golang.org/x/crypto/sha3"
 	"math/big"
 	"sync"
 	"time"
@@ -22,6 +21,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/trie"
 	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -92,20 +92,20 @@ type Harmony struct {
 
 func (h *Harmony) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
 	//TODO implement me
-	panic("implement me")
+	return nil, nil
 }
 
 func (h *Harmony) SealHash(header *types.Header) common.Hash {
 	//TODO implement me
-	panic("implement me")
+	return common.Hash{}
 }
 
 func (h *Harmony) Close() error {
 	//TODO implement me
-	panic("implement me")
+	return nil
 }
 
-type SignerFn func(accounts.Account, []byte) ([]byte, error)
+type SignerFn func(accounts.Account, string, []byte) ([]byte, error)
 
 // NOTE: sigHash was copy from clique
 // sigHash returns the hash which is used as input for the proof-of-authority
@@ -204,7 +204,7 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time+uint64(blockInterval) > header.Time {
+	if parent.Time+blockInterval > header.Time {
 		return ErrInvalidTimestamp
 	}
 	return nil
@@ -461,7 +461,7 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	block.Header().Time = uint64(time.Now().Unix())
 
 	// time's up, sign the block
-	sigHash, err := h.signFn(accounts.Account{Address: h.signer}, sigHash(header).Bytes())
+	sigHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(header).Bytes())
 	if err != nil {
 		return err
 	}

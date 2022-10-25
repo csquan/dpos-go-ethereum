@@ -42,7 +42,7 @@ func (w *wizard) makeGenesis() {
 		GasLimit:   4700000,
 		Difficulty: big.NewInt(524288),
 		Alloc:      make(core.GenesisAlloc),
-		Config: &params.ChainConfig{},
+		Config:     &params.ChainConfig{},
 	}
 	// Figure out which consensus engine to choose
 	fmt.Println()

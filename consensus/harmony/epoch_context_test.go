@@ -1,17 +1,16 @@
 package harmony
 
 import (
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/trie"
-
 	"github.com/stretchr/testify/assert"
 )
 

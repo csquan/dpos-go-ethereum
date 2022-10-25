@@ -27,6 +27,7 @@ import (
 	mapset "github.com/deckarep/golang-set"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -723,10 +724,10 @@ func (w *worker) resultLoop() {
 				// receipt/log of individual transactions were created.
 				receipt.Logs = make([]*types.Log, len(taskReceipt.Logs))
 				for i, taskLog := range taskReceipt.Logs {
-					log := new(types.Log)
-					receipt.Logs[i] = log
-					*log = *taskLog
-					log.BlockHash = hash
+					logger := new(types.Log)
+					receipt.Logs[i] = logger
+					*logger = *taskLog
+					logger.BlockHash = hash
 				}
 				logs = append(logs, receipt.Logs...)
 			}
@@ -755,16 +756,16 @@ func (w *worker) resultLoop() {
 func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase common.Address) (*environment, error) {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit.
-	state, err := w.chain.StateAt(parent.Root())
+	st, err := w.chain.StateAt(parent.Root())
 	if err != nil {
 		return nil, err
 	}
-	state.StartPrefetcher("miner")
+	st.StartPrefetcher("miner")
 
 	// Note the passed coinbase may be different with header.Coinbase.
 	env := &environment{
 		signer:    types.MakeSigner(w.chainConfig, header.Number),
-		state:     state,
+		state:     st,
 		coinbase:  coinbase,
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
@@ -1121,6 +1122,19 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 // Note the assumption is held that the mutation is allowed to the passed env, do
 // the deep copy first.
 func (w *worker) commit(env *environment, interval func(), update bool, start time.Time) error {
+	run := func(block *types.Block) {
+		select {
+		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
+			w.unconfirmed.Shift(block.NumberU64() - 1)
+			log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
+				"uncles", len(env.uncles), "txs", env.tcount,
+				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
+				"elapsed", common.PrettyDuration(time.Since(start)))
+
+		case <-w.exitCh:
+			log.Info("Worker has exited")
+		}
+	}
 	if w.isRunning() {
 		if interval != nil {
 			interval()
@@ -1132,19 +1146,22 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		if err != nil {
 			return err
 		}
-		// If we're post merge, just ignore
-		if !w.isTTDReached(block.Header()) {
-			select {
-			case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
-				w.unconfirmed.Shift(block.NumberU64() - 1)
-				log.Info("Commit new sealing work", "number", block.Number(), "sealhash", w.engine.SealHash(block.Header()),
-					"uncles", len(env.uncles), "txs", env.tcount,
-					"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
-					"elapsed", common.PrettyDuration(time.Since(start)))
-
-			case <-w.exitCh:
-				log.Info("Worker has exited")
+		if engine, ok := w.engine.(*harmony.Harmony); ok {
+			if err := engine.CheckValidator(w.chain.CurrentBlock(), uint64(time.Now().Unix())); err != nil {
+				switch err {
+				case harmony.ErrWaitForPrevBlock,
+					harmony.ErrMintFutureBlock,
+					harmony.ErrInvalidBlockValidator,
+					harmony.ErrInvalidMintBlockTime:
+					log.Debug("Failed to mint the block, while ", "err", err)
+				default:
+					log.Error("Failed to mint the block", "err", err)
+				}
+			} else {
+				run(block)
 			}
+		} else if !w.isTTDReached(block.Header()) {
+			run(block)
 		}
 	}
 	if update {

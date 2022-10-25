@@ -68,6 +68,14 @@ var (
 		Threshold: 2,
 	}
 
+	// RopstenChainConfig contains the chain parameters to run a node on the Ropsten test network.
+	RopstenChainConfig = &ChainConfig{
+		ChainID:                       big.NewInt(3),
+		TerminalTotalDifficulty:       new(big.Int).SetUint64(50_000_000_000_000_000),
+		TerminalTotalDifficultyPassed: true,
+		Ethash:                        new(EthashConfig),
+	}
+
 	// AllEthashProtocolChanges contains every protocol change (EIPs) introduced
 	// and accepted by the Ethereum core developers into the Ethash consensus.
 	//

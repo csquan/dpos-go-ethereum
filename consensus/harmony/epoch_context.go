@@ -28,7 +28,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	ctxTrie := ec.Context.Trie()
 	stateDB := ec.stateDB
 
-	iterCandidate := trie.NewIterator(ctxTrie.PrefixIterator(nil, candidatePrefix))
+	iterCandidate := trie.NewIterator(ctxTrie.PrefixIterator(nil, CandidatePrefix))
 	existCandidate := iterCandidate.Next()
 	if !existCandidate {
 		return votes, errors.New("no candidates")
@@ -36,7 +36,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	for existCandidate {
 		candidate := iterCandidate.Value
 		candidateAddr := common.BytesToAddress(candidate)
-		delegateIterator := trie.NewIterator(ctxTrie.PrefixIterator(candidate, delegatePrefix))
+		delegateIterator := trie.NewIterator(ctxTrie.PrefixIterator(candidate, DelegatePrefix))
 		existDelegator := delegateIterator.Next()
 		if !existDelegator {
 			votes[candidateAddr] = new(big.Int)
@@ -105,7 +105,7 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 	sort.Sort(sort.Reverse(needKickOutValidators))
 
 	candidateCount := 0
-	iter := trie.NewIterator(ec.Context.Trie().PrefixIterator(nil, candidatePrefix))
+	iter := trie.NewIterator(ec.Context.Trie().PrefixIterator(nil, CandidatePrefix))
 	for iter.Next() {
 		candidateCount++
 		if candidateCount >= needKickOutValidatorCnt+safeSize {

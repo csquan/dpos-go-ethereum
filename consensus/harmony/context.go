@@ -21,9 +21,9 @@ type Context struct {
 
 var (
 	epochPrefix     = []byte("epoch-")
-	delegatePrefix  = []byte("delegate-")
+	DelegatePrefix  = []byte("delegate-")
 	votePrefix      = []byte("vote-")
-	candidatePrefix = []byte("candidate-")
+	CandidatePrefix = []byte("candidate-")
 	mintCntPrefix   = []byte("mintCnt-")
 )
 
@@ -83,17 +83,17 @@ func (c *Context) FromHash(rootHash common.Hash) error {
 
 func (c *Context) KickOutCandidate(candidateAddr common.Address) error {
 	candidate := candidateAddr.Bytes()
-	err := c.trie.TryDeleteWithPrefix(candidate, candidatePrefix)
+	err := c.trie.TryDeleteWithPrefix(candidate, CandidatePrefix)
 	if err != nil {
 		if _, ok := err.(*trie.MissingNodeError); !ok {
 			return err
 		}
 	}
-	iter := trie.NewIterator(c.trie.PrefixIterator(candidate, delegatePrefix))
+	iter := trie.NewIterator(c.trie.PrefixIterator(candidate, DelegatePrefix))
 	for iter.Next() {
 		delegator := iter.Value
 		key := append(candidate, delegator...)
-		err = c.trie.TryDeleteWithPrefix(key, delegatePrefix)
+		err = c.trie.TryDeleteWithPrefix(key, DelegatePrefix)
 		if err != nil {
 			if _, ok := err.(*trie.MissingNodeError); !ok {
 				return err
@@ -119,14 +119,14 @@ func (c *Context) KickOutCandidate(candidateAddr common.Address) error {
 
 func (c *Context) BecomeCandidate(candidateAddr common.Address) error {
 	candidate := candidateAddr.Bytes()
-	return c.trie.TryUpdateWithPrefix(candidate, candidate, candidatePrefix)
+	return c.trie.TryUpdateWithPrefix(candidate, candidate, CandidatePrefix)
 }
 
 func (c *Context) Delegate(delegatorAddr, candidateAddr common.Address) error {
 	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
 
 	// the candidate must be candidate
-	candidateInTrie, err := c.trie.TryGetWithPrefix(candidate, candidatePrefix)
+	candidateInTrie, err := c.trie.TryGetWithPrefix(candidate, CandidatePrefix)
 	if err != nil {
 		return err
 	}
@@ -142,11 +142,11 @@ func (c *Context) Delegate(delegatorAddr, candidateAddr common.Address) error {
 		}
 	}
 	if oldCandidate != nil {
-		if err = c.trie.TryDeleteWithPrefix(append(oldCandidate, delegator...), delegatePrefix); err != nil {
+		if err = c.trie.TryDeleteWithPrefix(append(oldCandidate, delegator...), DelegatePrefix); err != nil {
 			return err
 		}
 	}
-	if err = c.trie.TryUpdateWithPrefix(append(candidate, delegator...), delegator, delegatePrefix); err != nil {
+	if err = c.trie.TryUpdateWithPrefix(append(candidate, delegator...), delegator, DelegatePrefix); err != nil {
 		return err
 	}
 	return c.trie.TryUpdateWithPrefix(delegator, candidate, votePrefix)
@@ -156,7 +156,7 @@ func (c *Context) UnDelegate(delegatorAddr, candidateAddr common.Address) error 
 	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
 
 	// the candidate must be candidate
-	candidateInTrie, err := c.trie.TryGetWithPrefix(candidate, candidatePrefix)
+	candidateInTrie, err := c.trie.TryGetWithPrefix(candidate, CandidatePrefix)
 	if err != nil {
 		return err
 	}
@@ -172,7 +172,7 @@ func (c *Context) UnDelegate(delegatorAddr, candidateAddr common.Address) error 
 		return errors.New("mismatch candidate to undelegate")
 	}
 
-	if err = c.trie.TryDeleteWithPrefix(append(candidate, delegator...), delegatePrefix); err != nil {
+	if err = c.trie.TryDeleteWithPrefix(append(candidate, delegator...), DelegatePrefix); err != nil {
 		return err
 	}
 	return c.trie.TryDeleteWithPrefix(delegator, votePrefix)

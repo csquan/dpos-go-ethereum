@@ -31,7 +31,7 @@ const (
 
 	blockInterval    = uint64(5)
 	epochInterval    = uint64(600)
-	maxValidatorSize = 21
+	maxValidatorSize = 5
 	safeSize         = maxValidatorSize*2/3 + 1
 	consensusSize    = maxValidatorSize*2/3 + 1
 )
@@ -122,6 +122,7 @@ func sigHash(header *types.Header) (hash common.Hash) {
 		header.ParentHash,
 		header.UncleHash,
 		header.Coinbase,
+		header.EngineHash,
 		header.Root,
 		header.TxHash,
 		header.ReceiptHash,
@@ -526,7 +527,7 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 	currentMintCntTrie := ctx.trie
 	currentEpoch := parentBlockTime / epochInterval
 	currentEpochBytes := make([]byte, 8)
-	binary.BigEndian.PutUint64(currentEpochBytes, uint64(currentEpoch))
+	binary.BigEndian.PutUint64(currentEpochBytes, currentEpoch)
 
 	cnt := uint64(1)
 	newEpoch := currentBlockTime / epochInterval

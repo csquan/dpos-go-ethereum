@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"math/big"
 	"strings"
 
@@ -355,6 +356,7 @@ func (g *Genesis) ToBlock() *types.Block {
 		Nonce:      types.EncodeNonce(g.Nonce),
 		Time:       g.Timestamp,
 		ParentHash: g.ParentHash,
+		EngineHash: g.ParentHash,
 		Extra:      g.ExtraData,
 		GasLimit:   g.GasLimit,
 		GasUsed:    g.GasUsed,
@@ -383,6 +385,9 @@ func (g *Genesis) ToBlock() *types.Block {
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
+	haCtx := initGenesisHarmonyContext(g, db)
+	g.ParentHash = haCtx.Root()
+
 	block := g.ToBlock()
 	if block.Number().Sign() != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
@@ -394,7 +399,7 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if err := config.CheckConfigForkOrder(); err != nil {
 		return nil, err
 	}
-	if config.Clique != nil && len(block.Extra()) < 32+crypto.SignatureLength {
+	if (config.Clique != nil) && len(block.Extra()) < 32+crypto.SignatureLength {
 		return nil, errors.New("can't start clique chain without signers")
 	}
 	// All the checks has passed, flush the states derived from the genesis
@@ -499,4 +504,20 @@ func decodePrealloc(data string) GenesisAlloc {
 		ga[common.BigToAddress(account.Addr)] = GenesisAccount{Balance: account.Balance}
 	}
 	return ga
+}
+
+func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) *harmony.Context {
+	ha, err := harmony.NewContextFromHash(trie.NewDatabase(db), common.Hash{})
+	if err != nil {
+		return nil
+	}
+	if g.Config != nil && g.Config.Harmony != nil && g.Config.Harmony.Validators != nil {
+		ha.SetValidators(g.Config.Harmony.Validators)
+		for _, validator := range g.Config.Harmony.Validators {
+			ha.Trie().TryUpdateWithPrefix(append(validator.Bytes(), validator.Bytes()...), validator.Bytes(), harmony.DelegatePrefix)
+			ha.Trie().TryUpdateWithPrefix(validator.Bytes(), validator.Bytes(), harmony.CandidatePrefix)
+		}
+	}
+	ha.Commit()
+	return ha
 }

@@ -93,9 +93,10 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.Coinbase != nil {
 		h.Coinbase = *dec.Coinbase
 	}
-	if dec.EngineHash != nil {
-		h.EngineHash = *dec.EngineHash
+	if dec.EngineHash == nil {
+		return errors.New("missing required field 'engineHash' for Header")
 	}
+	h.EngineHash = *dec.EngineHash
 	if dec.Root == nil {
 		return errors.New("missing required field 'stateRoot' for Header")
 	}

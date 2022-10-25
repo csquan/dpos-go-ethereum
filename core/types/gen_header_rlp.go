@@ -5,11 +5,8 @@
 
 package types
 
-import (
-	"io"
-
-	"github.com/ethereum/go-ethereum/rlp"
-)
+import "github.com/ethereum/go-ethereum/rlp"
+import "io"
 
 func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w := rlp.NewEncoderBuffer(_w)
@@ -17,6 +14,7 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.ParentHash[:])
 	w.WriteBytes(obj.UncleHash[:])
 	w.WriteBytes(obj.Coinbase[:])
+	w.WriteBytes(obj.EngineHash[:])
 	w.WriteBytes(obj.Root[:])
 	w.WriteBytes(obj.TxHash[:])
 	w.WriteBytes(obj.ReceiptHash[:])
@@ -43,7 +41,6 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.Extra)
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
-	w.WriteBytes(obj.EngineHash[:])
 	_tmp1 := obj.BaseFee != nil
 	if _tmp1 {
 		if obj.BaseFee == nil {

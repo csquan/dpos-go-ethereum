@@ -253,7 +253,7 @@ func setTestMintCnt(ctx *Context, epoch uint64, validator common.Address, count 
 
 func getCandidates(cTrie *trie.Trie) map[common.Address]bool {
 	candidateMap := map[common.Address]bool{}
-	iter := trie.NewIterator(cTrie.PrefixIterator(nil, candidatePrefix))
+	iter := trie.NewIterator(cTrie.PrefixIterator(nil, CandidatePrefix))
 	for iter.Next() {
 		candidateMap[common.BytesToAddress(iter.Value)] = true
 	}

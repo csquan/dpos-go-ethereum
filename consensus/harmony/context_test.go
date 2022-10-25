@@ -42,7 +42,7 @@ func TestContextBecomeCandidate(t *testing.T) {
 	}
 
 	candidateMap := map[common.Address]bool{}
-	candidateIter := trie.NewIterator(ctx.trie.PrefixIterator(nil, candidatePrefix))
+	candidateIter := trie.NewIterator(ctx.trie.PrefixIterator(nil, CandidatePrefix))
 	for candidateIter.Next() {
 		candidateMap[common.BytesToAddress(candidateIter.Value)] = true
 	}
@@ -69,7 +69,7 @@ func TestContextKickOutCandidate(t *testing.T) {
 	kickIdx := 1
 	assert.Nil(t, ctx.KickOutCandidate(candidates[kickIdx]))
 	candidateMap := map[common.Address]bool{}
-	candidateIter := trie.NewIterator(ctx.trie.PrefixIterator(nil, candidatePrefix))
+	candidateIter := trie.NewIterator(ctx.trie.PrefixIterator(nil, CandidatePrefix))
 	for candidateIter.Next() {
 		candidateMap[common.BytesToAddress(candidateIter.Value)] = true
 	}
@@ -79,7 +79,7 @@ func TestContextKickOutCandidate(t *testing.T) {
 		voteMap[common.BytesToAddress(voteIter.Value)] = true
 	}
 	for i, candidate := range candidates {
-		delegateIter := trie.NewIterator(ctx.trie.PrefixIterator(candidate.Bytes(), delegatePrefix))
+		delegateIter := trie.NewIterator(ctx.trie.PrefixIterator(candidate.Bytes(), DelegatePrefix))
 		if i == kickIdx {
 			assert.False(t, delegateIter.Next())
 			assert.False(t, candidateMap[candidate])
@@ -103,7 +103,7 @@ func TestContextDelegateAndUnDelegate(t *testing.T) {
 	assert.Nil(t, ctx.BecomeCandidate(newCandidate))
 
 	// delegator delegate to not exist candidate
-	candidateIter := trie.NewIterator(ctx.trie.PrefixIterator(nil, candidatePrefix))
+	candidateIter := trie.NewIterator(ctx.trie.PrefixIterator(nil, CandidatePrefix))
 	candidateMap := map[string]bool{}
 	for candidateIter.Next() {
 		candidateMap[string(candidateIter.Value)] = true
@@ -112,9 +112,9 @@ func TestContextDelegateAndUnDelegate(t *testing.T) {
 
 	// delegator delegate to old candidate
 	assert.Nil(t, ctx.Delegate(delegator, candidate))
-	delegateIter := trie.NewIterator(ctx.trie.PrefixIterator(candidate.Bytes(), delegatePrefix))
+	delegateIter := trie.NewIterator(ctx.trie.PrefixIterator(candidate.Bytes(), DelegatePrefix))
 	if assert.True(t, delegateIter.Next()) {
-		assert.Equal(t, append(delegatePrefix, append(candidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
+		assert.Equal(t, append(DelegatePrefix, append(candidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
 		assert.Equal(t, delegator, common.BytesToAddress(delegateIter.Value))
 	}
 	voteIter := trie.NewIterator(ctx.trie.PrefixIterator(nil, votePrefix))
@@ -125,11 +125,11 @@ func TestContextDelegateAndUnDelegate(t *testing.T) {
 
 	// delegator delegate to new candidate
 	assert.Nil(t, ctx.Delegate(delegator, newCandidate))
-	delegateIter = trie.NewIterator(ctx.trie.PrefixIterator(candidate.Bytes(), delegatePrefix))
+	delegateIter = trie.NewIterator(ctx.trie.PrefixIterator(candidate.Bytes(), DelegatePrefix))
 	assert.False(t, delegateIter.Next())
-	delegateIter = trie.NewIterator(ctx.trie.PrefixIterator(newCandidate.Bytes(), delegatePrefix))
+	delegateIter = trie.NewIterator(ctx.trie.PrefixIterator(newCandidate.Bytes(), DelegatePrefix))
 	if assert.True(t, delegateIter.Next()) {
-		assert.Equal(t, append(delegatePrefix, append(newCandidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
+		assert.Equal(t, append(DelegatePrefix, append(newCandidate.Bytes(), delegator.Bytes()...)...), delegateIter.Key)
 		assert.Equal(t, delegator, common.BytesToAddress(delegateIter.Value))
 	}
 	voteIter = trie.NewIterator(ctx.trie.PrefixIterator(nil, votePrefix))
@@ -146,7 +146,7 @@ func TestContextDelegateAndUnDelegate(t *testing.T) {
 
 	// delegator undelegate to new candidate
 	assert.Nil(t, ctx.UnDelegate(delegator, newCandidate))
-	delegateIter = trie.NewIterator(ctx.trie.PrefixIterator(newCandidate.Bytes(), delegatePrefix))
+	delegateIter = trie.NewIterator(ctx.trie.PrefixIterator(newCandidate.Bytes(), DelegatePrefix))
 	assert.False(t, delegateIter.Next())
 	voteIter = trie.NewIterator(ctx.trie.PrefixIterator(nil, votePrefix))
 	assert.False(t, voteIter.Next())

@@ -51,8 +51,8 @@ func mockNewContext(db *trie.Database) *Context {
 	for j := 0; j < len(MockEpoch); j++ {
 		delegator = common.HexToAddress(MockEpoch[j]).Bytes()
 		candidate = common.HexToAddress(MockEpoch[j]).Bytes()
-		ctx.trie.TryUpdateWithPrefix(append(candidate, delegator...), candidate, delegatePrefix)
-		ctx.trie.TryUpdateWithPrefix(candidate, candidate, candidatePrefix)
+		ctx.trie.TryUpdateWithPrefix(append(candidate, delegator...), candidate, DelegatePrefix)
+		ctx.trie.TryUpdateWithPrefix(candidate, candidate, CandidatePrefix)
 		ctx.trie.TryUpdateWithPrefix(candidate, candidate, votePrefix)
 	}
 	return ctx

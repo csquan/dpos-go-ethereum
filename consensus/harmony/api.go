@@ -99,7 +99,7 @@ func (api *API) GetDelegateList() (map[common.Address]common.Address, error) {
 	ctx := Context{}
 	ctx.SetTrie(ctxTrie)
 
-	iterDelegate := trie.NewIterator(ctxTrie.PrefixIterator(nil, delegatePrefix))
+	iterDelegate := trie.NewIterator(ctxTrie.PrefixIterator(nil, DelegatePrefix))
 	existDelegate := iterDelegate.Next()
 	if !existDelegate {
 		//return delegates, errors.New("no delegates")
@@ -251,7 +251,7 @@ func (api *API) GetCandidates() ([]common.Address, error) {
 	ctx := Context{}
 	ctx.SetTrie(ctxTrie)
 
-	iterCandidates := trie.NewIterator(ctxTrie.PrefixIterator(nil, candidatePrefix))
+	iterCandidates := trie.NewIterator(ctxTrie.PrefixIterator(nil, CandidatePrefix))
 	existCandidate := iterCandidates.Next()
 	if !existCandidate {
 		//return nil, errors.New("no candidates")

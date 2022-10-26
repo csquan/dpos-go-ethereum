@@ -64,6 +64,7 @@ func (c *Context) Snapshot() *Context {
 
 func (c *Context) RevertToSnapShot(snapshot *Context) {
 	c.trie = snapshot.trie
+	c.tdb = snapshot.tdb
 }
 
 func (c *Context) FromHash(rootHash common.Hash) error {

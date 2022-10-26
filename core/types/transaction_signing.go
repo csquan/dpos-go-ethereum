@@ -38,7 +38,7 @@ type sigCache struct {
 
 // MakeSigner returns a Signer based on the given chain config and block number.
 func MakeSigner(config *params.ChainConfig, blockNumber *big.Int) Signer {
-	if config.ChainID == nil || common.Big0.Cmp(blockNumber) == 0 {
+	if config.ChainID == nil {
 		return HomesteadSigner{}
 	}
 	return NewLondonSigner(config.ChainID)

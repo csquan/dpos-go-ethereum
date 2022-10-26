@@ -469,22 +469,26 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	}
 	now := uint64(time.Now().Unix())
 	delay := NextSlot(now) - now
+	sealing := func() *types.Block {
+		block.Header().Time = uint64(time.Now().Unix())
+		// time's up, sign the block
+		sigHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(header).Bytes())
+		if err != nil {
+			log.Error("signFn error", "err", err)
+			return nil
+		}
+		copy(header.Extra[len(header.Extra)-extraSeal:], sigHash)
+		return block.WithSeal(header)
+	}
 	if delay > 0 {
 		select {
 		case <-stop:
 			return nil
 		case <-time.After(time.Duration(delay) * time.Second):
+			results <- sealing()
 		}
 	}
-	block.Header().Time = uint64(time.Now().Unix())
 
-	// time's up, sign the block
-	sigHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(header).Bytes())
-	if err != nil {
-		return err
-	}
-	copy(header.Extra[len(header.Extra)-extraSeal:], sigHash)
-	results <- block.WithSeal(header)
 	return nil
 }
 

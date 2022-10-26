@@ -31,7 +31,7 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inMemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	blockInterval    = uint64(5)
+	blockInterval    = uint64(2)
 	epochInterval    = uint64(600)
 	maxValidatorSize = 5
 	safeSize         = maxValidatorSize*2/3 + 1
@@ -137,8 +137,7 @@ func (h *Harmony) FinalizeAndAssemble(
 }
 
 func (h *Harmony) SealHash(header *types.Header) common.Hash {
-	//TODO implement me
-	return common.Hash{}
+	return sigHash(header)
 }
 
 func (h *Harmony) Close() error {
@@ -424,6 +423,7 @@ func (h *Harmony) Finalize(
 	txs []*types.Transaction,
 	uncles []*types.Header,
 ) {
+	return
 }
 
 func (h *Harmony) checkDeadline(lastBlock *types.Block, now uint64) error {

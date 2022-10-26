@@ -89,7 +89,7 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 		binary.BigEndian.PutUint64(key, epoch)
 		key = append(key, validator.Bytes()...)
 		cnt := uint64(0)
-		if cntBytes := ec.Context.Trie().Get(key); cntBytes != nil {
+		if cntBytes, err := ec.Context.Trie().TryGetWithPrefix(key, mintCntPrefix); err == nil && cntBytes != nil {
 			cnt = binary.BigEndian.Uint64(cntBytes)
 		}
 		if cnt < epochDuration/blockInterval/maxValidatorSize/2 {
@@ -162,9 +162,13 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, prevEpoch)
+	var err error
+	if ec.Context, err = NewContextFromHash(ec.Context.TDB(), parent.EngineHash); err != nil {
+		return err
+	}
 	iter := trie.NewIterator(ec.Context.Trie().PrefixIterator(prevEpochBytes, mintCntPrefix))
 	for i := prevEpoch; i < currentEpoch; i++ {
-		// if prevEpoch is not genesis, kickout not active candidate
+		// if prevEpoch is not genesis, kick-out not active candidate
 		if !prevEpochIsGenesis && iter.Next() {
 			if err := ec.kickOutValidator(prevEpoch); err != nil {
 				return err
@@ -198,7 +202,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 			sortedValidators = append(sortedValidators, candidate.address)
 		}
 
-		epochTrie, _ := NewTrie(common.Hash{}, ec.Context.DB())
+		epochTrie, _ := NewTrie(common.Hash{}, ec.Context.TDB())
 		ec.Context.SetTrie(epochTrie)
 		ec.Context.SetValidators(sortedValidators)
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)

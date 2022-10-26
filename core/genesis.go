@@ -22,13 +22,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"math/big"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -351,12 +351,21 @@ func (g *Genesis) ToBlock() *types.Block {
 	if err != nil {
 		panic(err)
 	}
+
+	var engineHash common.Hash
+	if g.Config.Harmony != nil {
+		engineDB := harmony.OpenDB()
+		engineHash = initGenesisHarmonyContext(g, trie.NewDatabase(engineDB))
+		log.Warn("EngineHash", "is", engineHash.String())
+
+	}
+
 	head := &types.Header{
 		Number:     new(big.Int).SetUint64(g.Number),
 		Nonce:      types.EncodeNonce(g.Nonce),
 		Time:       g.Timestamp,
 		ParentHash: g.ParentHash,
-		EngineHash: g.ParentHash,
+		EngineHash: engineHash,
 		Extra:      g.ExtraData,
 		GasLimit:   g.GasLimit,
 		GasUsed:    g.GasUsed,
@@ -385,9 +394,6 @@ func (g *Genesis) ToBlock() *types.Block {
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
-	haCtx := initGenesisHarmonyContext(g, db)
-	g.ParentHash = haCtx.Root()
-
 	block := g.ToBlock()
 	if block.Number().Sign() != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
@@ -506,18 +512,28 @@ func decodePrealloc(data string) GenesisAlloc {
 	return ga
 }
 
-func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) *harmony.Context {
-	ha, err := harmony.NewContextFromHash(trie.NewDatabase(db), common.Hash{})
+func initGenesisHarmonyContext(g *Genesis, db *trie.Database) common.Hash {
+	ctx, err := harmony.NewContextFromHash(db, common.Hash{})
 	if err != nil {
-		return nil
+		return types.EmptyRootHash
 	}
 	if g.Config != nil && g.Config.Harmony != nil && g.Config.Harmony.Validators != nil {
-		ha.SetValidators(g.Config.Harmony.Validators)
+		if err := ctx.SetValidators(g.Config.Harmony.Validators); err != nil {
+			log.Error("SetValidators", "err", err)
+		}
 		for _, validator := range g.Config.Harmony.Validators {
-			ha.Trie().TryUpdateWithPrefix(append(validator.Bytes(), validator.Bytes()...), validator.Bytes(), harmony.DelegatePrefix)
-			ha.Trie().TryUpdateWithPrefix(validator.Bytes(), validator.Bytes(), harmony.CandidatePrefix)
+			if err := ctx.Trie().TryUpdateWithPrefix(append(validator.Bytes(), validator.Bytes()...), validator.Bytes(), harmony.DelegatePrefix); err != nil {
+				log.Error("Update Delegates", "err", err)
+			}
+			if err := ctx.Trie().TryUpdateWithPrefix(validator.Bytes(), validator.Bytes(), harmony.CandidatePrefix); err != nil {
+				log.Error("Update Candidates", "err", err)
+			}
 		}
 	}
-	ha.Commit()
-	return ha
+	if hash, err := ctx.Commit(); err != nil {
+		log.Error("Commit error", "err", err)
+		return types.EmptyRootHash
+	} else {
+		return hash
+	}
 }

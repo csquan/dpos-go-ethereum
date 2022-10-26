@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/ethdb/memorydb"
-	"github.com/ethereum/go-ethereum/log"
 )
 
 func TestEmptyIterator(t *testing.T) {
@@ -619,7 +618,11 @@ func TestIteratorNodeBlob(t *testing.T) {
 }
 
 func TestPrefixIterator(t *testing.T) {
-	tdb := NewDatabase(rawdb.NewMemoryDatabase())
+	rdb, err := rawdb.NewLevelDBDatabaseWithFreezer("/tmp/testEngineDB", 0, 0, "/tmp/testAncient", "harmony", false)
+	if err != nil {
+		t.Errorf("rawdb error: %v", err)
+	}
+	tdb := NewDatabase(rdb)
 	trie := NewEmpty(tdb)
 	vals := []struct{ k, v string }{
 		{"do", "verb"},
@@ -638,17 +641,23 @@ func TestPrefixIterator(t *testing.T) {
 		all[val.k] = val.v
 		trie.Update([]byte(val.k), []byte(val.v))
 	}
-	root, nodes, err := trie.Commit(true)
+	rootHash, nodes, err := trie.Commit(true)
+	println(rootHash.String())
 	if err != nil {
-		t.Errorf("commit err")
+		t.Errorf("commit err %v", err)
 	}
 	if nodes != nil {
 		err = tdb.Update(NewWithNodeSet(nodes))
 		if err != nil {
-			log.Debug("update db", "err", err)
+			//	t.Errorf("update db err: %v", err)
+		}
+		err = tdb.Cap(0)
+		if err != nil {
+			t.Errorf("Cap db err: %v", err)
 		}
 	}
-	trie, err = New(common.Hash{}, root, tdb)
+	hashStr := "0xbf573982ca9201a59099adc6463957b1f5995a3de780df555fe702634b98146d"
+	trie2, err := New(common.Hash{}, common.HexToHash(hashStr), tdb)
 	if err != nil {
 		t.Errorf("renew err")
 	}
@@ -660,7 +669,7 @@ func TestPrefixIterator(t *testing.T) {
 		"do":     "verb",
 	}
 	found := make(map[string]string)
-	it := NewIterator(trie.PrefixIterator(nil, []byte("do")))
+	it := NewIterator(trie2.PrefixIterator(nil, []byte("do")))
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -681,7 +690,7 @@ func TestPrefixIterator(t *testing.T) {
 		"dog":  "puppy",
 	}
 	found = make(map[string]string)
-	it = NewIterator(trie.PrefixIterator(nil, []byte("dog")))
+	it = NewIterator(trie2.PrefixIterator(nil, []byte("dog")))
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -698,7 +707,7 @@ func TestPrefixIterator(t *testing.T) {
 	}
 
 	found = make(map[string]string)
-	it = NewIterator(trie.PrefixIterator(nil, []byte("test")))
+	it = NewIterator(trie2.PrefixIterator(nil, []byte("test")))
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}
@@ -719,7 +728,7 @@ func TestPrefixIterator(t *testing.T) {
 		"dxracer":                       "chair",
 	}
 	found = make(map[string]string)
-	it = NewIterator(trie.PrefixIterator(nil, nil))
+	it = NewIterator(trie2.PrefixIterator(nil, nil))
 	for it.Next() {
 		found[string(it.Key)] = string(it.Value)
 	}

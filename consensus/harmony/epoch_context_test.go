@@ -297,13 +297,13 @@ func TestEpochContextTryElect(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, maxValidatorSize, len(result))
 	for _, validator := range result {
-		assert.True(t, strings.Contains(validator.String(), "addr"))
+		assert.True(t, strings.Contains(string(validator[:]), "addr"))
 	}
 	assert.NotEqual(t, oldHash, ctx.Trie().Hash())
 
 	// genesisEpoch != parentEpoch and have none mintCnt do not kickout
 	genesis = &types.Header{
-		Time: -epochInterval,
+		Time: 0,
 	}
 	parent = &types.Header{
 		Difficulty: big.NewInt(1),

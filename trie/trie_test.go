@@ -77,8 +77,17 @@ func TestMissingNodeDisk(t *testing.T)    { testMissingNode(t, false) }
 func TestMissingNodeMemonly(t *testing.T) { testMissingNode(t, true) }
 
 func testMissingNode(t *testing.T, memonly bool) {
-	diskdb := memorydb.New()
-	triedb := NewDatabase(diskdb)
+	var diskDB ethdb.KeyValueStore
+	var err error
+	if memonly {
+		diskDB = memorydb.New()
+	} else {
+		diskDB, err = rawdb.NewLevelDBDatabaseWithFreezer("/tmp/testDB111", 0, 0, "", "", false)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+	}
+	triedb := NewDatabase(diskDB)
 
 	trie := NewEmpty(triedb)
 	updateString(trie, "120000", "qwerqwerqwerqwerqwerqwerqwerqwer")
@@ -89,13 +98,13 @@ func testMissingNode(t *testing.T, memonly bool) {
 		triedb.Commit(root, true, nil)
 	}
 
-	trie, _ = New(common.Hash{}, root, triedb)
-	_, err := trie.TryGet([]byte("120000"))
+	trie2, _ := New(common.Hash{}, root, triedb)
+	_, err = trie2.TryGet([]byte("120000"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	trie, _ = New(common.Hash{}, root, triedb)
-	_, err = trie.TryGet([]byte("120099"))
+	trie3, _ := New(common.Hash{}, root, triedb)
+	_, err = trie3.TryGet([]byte("120099"))
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
@@ -119,7 +128,7 @@ func testMissingNode(t *testing.T, memonly bool) {
 	if memonly {
 		delete(triedb.dirties, hash)
 	} else {
-		diskdb.Delete(hash[:])
+		diskDB.Delete(hash[:])
 	}
 
 	trie, _ = New(common.Hash{}, root, triedb)

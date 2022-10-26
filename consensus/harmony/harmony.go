@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"github.com/ethereum/go-ethereum/core/rawdb"
+	log2 "log"
 	"math/big"
 	"sync"
 	"time"
@@ -90,9 +92,48 @@ type Harmony struct {
 	stop chan bool
 }
 
-func (h *Harmony) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
-	//TODO implement me
-	return nil, nil
+func OpenDB() ethdb.Database {
+	engineDB, err := rawdb.NewLevelDBDatabaseWithFreezer("engineDB", 0, 0, "", "harmony", false)
+	if err != nil {
+		log2.Fatalf("Create engineDB err: %v", err)
+	}
+	return engineDB
+}
+
+func (h *Harmony) FinalizeAndAssemble(
+	chain consensus.ChainHeaderReader,
+	header *types.Header,
+	state *state.StateDB,
+	txs []*types.Transaction,
+	uncles []*types.Header,
+	receipts []*types.Receipt,
+) (*types.Block, error) {
+	// Accumulate block rewards and commit the final state root
+	AccumulateRewards(chain.Config(), state, header, uncles)
+	header.Root = state.IntermediateRoot(true)
+
+	parent := chain.GetHeaderByHash(header.ParentHash)
+	epochContext := &EpochContext{
+		stateDB:   state,
+		Context:   h.ctx,
+		TimeStamp: header.Time,
+	}
+	if timeOfFirstBlock == 0 {
+		if firstBlockHeader := chain.GetHeaderByNumber(1); firstBlockHeader != nil {
+			timeOfFirstBlock = firstBlockHeader.Time
+		}
+	}
+	genesis := chain.GetHeaderByNumber(0)
+	err := epochContext.tryElect(genesis, parent)
+	if err != nil {
+		log.Debug("got error when elect next epoch,", "err:", err)
+		return nil, err
+	}
+
+	//update mint count trie
+	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
+	header.EngineHash = h.ctx.Trie().Hash()
+	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
 
 func (h *Harmony) SealHash(header *types.Header) common.Hash {
@@ -140,12 +181,14 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-func New(config *params.HarmonyConfig, db ethdb.Database) *Harmony {
+func New(config *params.HarmonyConfig) *Harmony {
 	signatures, _ := lru.NewARC(inMemorySignatures)
-	ctx, _ := NewContext(trie.NewDatabase(db))
+	engineDB := OpenDB()
+	tdb := trie.NewDatabase(engineDB)
+	ctx, _ := NewContext(tdb)
 	return &Harmony{
 		config:     config,
-		db:         db,
+		db:         engineDB,
 		ctx:        ctx,
 		signatures: signatures,
 	}
@@ -255,7 +298,7 @@ func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, 
 	} else {
 		prevHeader = chain.GetHeader(header.ParentHash, number-1)
 	}
-	ctx, err := NewContextFromHash(trie.NewDatabase(h.db), prevHeader.EngineHash)
+	ctx, err := NewContextFromHash(h.ctx.TDB(), prevHeader.EngineHash)
 	if err != nil {
 		return err
 	}
@@ -381,32 +424,6 @@ func (h *Harmony) Finalize(
 	txs []*types.Transaction,
 	uncles []*types.Header,
 ) {
-	// Accumulate block rewards and commit the final state root
-	AccumulateRewards(chain.Config(), state, header, uncles)
-	header.Root = state.IntermediateRoot(true)
-
-	parent := chain.GetHeaderByHash(header.ParentHash)
-	epochContext := &EpochContext{
-		stateDB:   state,
-		Context:   h.ctx,
-		TimeStamp: header.Time,
-	}
-	if timeOfFirstBlock == 0 {
-		if firstBlockHeader := chain.GetHeaderByNumber(1); firstBlockHeader != nil {
-			timeOfFirstBlock = firstBlockHeader.Time
-		}
-	}
-	genesis := chain.GetHeaderByNumber(0)
-	err := epochContext.tryElect(genesis, parent)
-	if err != nil {
-		log.Debug("got error when elect next epoch,", "err:", err)
-		return
-	}
-
-	//update mint count trie
-	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
-	header.EngineHash = h.ctx.Trie().Hash()
-	types.NewBlock(header, txs, uncles, nil, trie.NewStackTrie(nil))
 }
 
 func (h *Harmony) checkDeadline(lastBlock *types.Block, now uint64) error {
@@ -426,7 +443,7 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 	if err := h.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	ctx, err := NewContextFromHash(trie.NewDatabase(h.db), lastBlock.Header().EngineHash)
+	ctx, err := NewContextFromHash(h.ctx.TDB(), lastBlock.Header().EngineHash)
 	if err != nil {
 		return err
 	}
@@ -524,7 +541,7 @@ func NextSlot(now uint64) uint64 {
 
 // update counts in MintCntTrie for the miner of newBlock
 func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Address, ctx *Context) {
-	currentMintCntTrie := ctx.trie
+	currentMintCntTrie := ctx.Trie()
 	currentEpoch := parentBlockTime / epochInterval
 	currentEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(currentEpochBytes, currentEpoch)
@@ -537,8 +554,10 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 
 		// when current is not genesis, read last count from the MintCntTrie
 		if iter.Next() {
-			cntBytes := currentMintCntTrie.Get(append(currentEpochBytes, validator.Bytes()...))
-
+			cntBytes, err := currentMintCntTrie.TryGetWithPrefix(append(currentEpochBytes, validator.Bytes()...), mintCntPrefix)
+			if err != nil {
+				return
+			}
 			// not the first time to mint
 			if cntBytes != nil {
 				cnt = binary.BigEndian.Uint64(cntBytes) + 1

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -15,8 +14,7 @@ import (
 
 type Context struct {
 	trie *trie.Trie
-
-	db *trie.Database
+	tdb  *trie.Database
 }
 
 var (
@@ -27,36 +25,29 @@ var (
 	mintCntPrefix   = []byte("mintCnt-")
 )
 
-func NewTrie(root common.Hash, db *trie.Database) (*trie.Trie, error) {
-	return trie.New(common.Hash{}, root, db)
+func NewTrie(root common.Hash, tdb *trie.Database) (*trie.Trie, error) {
+	return trie.New(common.Hash{}, root, tdb)
 }
 
-func NewContext(db *trie.Database) (*Context, error) {
-	t, err := NewTrie(common.Hash{}, db)
+func NewContext(tdb *trie.Database) (*Context, error) {
+	return NewContextFromHash(tdb, common.Hash{})
+}
+
+func NewContextFromHash(tdb *trie.Database, rootHash common.Hash) (*Context, error) {
+	t, err := NewTrie(rootHash, tdb)
 	if err != nil {
 		return nil, err
 	}
 	return &Context{
 		trie: t,
-		db:   db,
-	}, nil
-}
-
-func NewContextFromHash(db *trie.Database, rootHash common.Hash) (*Context, error) {
-	t, err := NewTrie(rootHash, db)
-	if err != nil {
-		return nil, err
-	}
-	return &Context{
-		trie: t,
-		db:   db,
+		tdb:  tdb,
 	}, nil
 }
 
 func (c *Context) Copy() *Context {
 	return &Context{
 		trie: c.trie,
-		db:   c.db,
+		tdb:  c.tdb,
 	}
 }
 
@@ -77,7 +68,7 @@ func (c *Context) RevertToSnapShot(snapshot *Context) {
 
 func (c *Context) FromHash(rootHash common.Hash) error {
 	var err error
-	c.trie, err = NewTrie(rootHash, c.db)
+	c.trie, err = NewTrie(rootHash, c.tdb)
 	return err
 }
 
@@ -183,16 +174,22 @@ func (c *Context) Commit() (common.Hash, error) {
 	if err != nil {
 		return types.EmptyRootHash, err
 	}
-	err = c.db.Update(trie.NewWithNodeSet(nodes))
-	if err != nil {
-		log.Debug("db update", "err", err)
-		return types.EmptyRootHash, err
+	if nodes != nil {
+		nodeSet := trie.NewWithNodeSet(nodes)
+		err = c.TDB().Update(nodeSet)
+		if err != nil {
+			log.Warn("db update", "err", err)
+		}
+		err = c.TDB().Cap(0)
+		if err != nil {
+			log.Warn("db Cap", "err", err)
+		}
 	}
 	return rootHash, nil
 }
 
 func (c *Context) Trie() *trie.Trie        { return c.trie }
-func (c *Context) DB() *trie.Database      { return c.db }
+func (c *Context) TDB() *trie.Database     { return c.tdb }
 func (c *Context) SetTrie(trie *trie.Trie) { c.trie = trie }
 
 func (c *Context) GetValidators() ([]common.Address, error) {

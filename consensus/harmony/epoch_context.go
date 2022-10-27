@@ -57,10 +57,9 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 		}
 		existCandidate = iterCandidate.Next()
 	}
-	log.Info("*******in epoch get vote*********")
-
+	log.Debug("*******in epoch get vote*********")
 	for k, v := range votes {
-		log.Info("votes", "key", k.Hex(), "value", v)
+		log.Debug("votes", "key", k.String(), "value", v)
 	}
 	return votes, nil
 }
@@ -162,10 +161,6 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, prevEpoch)
-	var err error
-	if ec.Context, err = NewContextFromHash(ec.Context.TDB(), parent.EngineHash); err != nil {
-		return err
-	}
 	iter := trie.NewIterator(ec.Context.Trie().PrefixIterator(prevEpochBytes, mintCntPrefix))
 	for i := prevEpoch; i < currentEpoch; i++ {
 		// if prevEpoch is not genesis, kick-out not active candidate
@@ -201,10 +196,9 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		for _, candidate := range candidates {
 			sortedValidators = append(sortedValidators, candidate.address)
 		}
-
-		epochTrie, _ := NewTrie(common.Hash{}, ec.Context.TDB())
-		ec.Context.SetTrie(epochTrie)
-		ec.Context.SetValidators(sortedValidators)
+		if err = ec.Context.SetValidators(sortedValidators); err != nil {
+			log.Warn("set new validators", "err", err)
+		}
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
 	return nil

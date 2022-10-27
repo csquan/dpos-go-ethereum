@@ -1078,6 +1078,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 				"uncles", len(env.uncles), "txs", env.tcount,
 				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))
+			log.Info("block header content", "header", block.Header())
 
 		case <-w.exitCh:
 			log.Info("Worker has exited")
@@ -1092,6 +1093,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		env := env.copy()
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
+			log.Error("FinalizeAndAssemble error", "err", err)
 			return err
 		}
 		if engine, ok := w.engine.(*harmony.Harmony); ok {

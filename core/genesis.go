@@ -355,7 +355,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	var engineHash common.Hash
 	if g.Config.Harmony != nil {
 		engineHash = initGenesisHarmonyContext(g, db)
-		log.Warn("EngineHash value", "", engineHash.String())
+		log.Warn("EngineHash value", "hash", engineHash.String())
 	}
 
 	head := &types.Header{
@@ -517,8 +517,9 @@ func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) common.Hash {
 	} else {
 		tdb = trie.NewDatabase(db)
 	}
-	ctx, err := harmony.NewContextFromHash(tdb, common.Hash{})
+	ctx, err := harmony.NewEmptyContext(tdb)
 	if err != nil {
+		log.Error("create empty ctx error", "err", err)
 		return types.EmptyRootHash
 	}
 	if g.Config != nil && g.Config.Harmony != nil && g.Config.Harmony.Validators != nil {
@@ -526,11 +527,11 @@ func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) common.Hash {
 			log.Error("SetValidators", "err", err)
 		}
 		for _, validator := range g.Config.Harmony.Validators {
-			if err := ctx.Trie().TryUpdateWithPrefix(append(validator.Bytes(), validator.Bytes()...), validator.Bytes(), harmony.DelegatePrefix); err != nil {
-				log.Error("Update Delegates", "err", err)
-			}
 			if err := ctx.Trie().TryUpdateWithPrefix(validator.Bytes(), validator.Bytes(), harmony.CandidatePrefix); err != nil {
 				log.Error("Update Candidates", "err", err)
+			}
+			if err := ctx.Trie().TryUpdateWithPrefix(append(validator.Bytes(), validator.Bytes()...), validator.Bytes(), harmony.DelegatePrefix); err != nil {
+				log.Error("Update Delegates", "err", err)
 			}
 		}
 	}

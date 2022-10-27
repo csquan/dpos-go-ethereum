@@ -11,12 +11,12 @@ import (
 
 func TestContextSnapshot(t *testing.T) {
 	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
-	ctx, err := NewContext(db)
+	ctx, err := NewEmptyContext(db)
 	assert.Nil(t, err)
 
 	snapshot := ctx.Snapshot()
 	assert.Equal(t, ctx.Root(), snapshot.Root())
-	assert.NotEqual(t, ctx, snapshot)
+	assert.Equal(t, ctx, snapshot)
 
 	// change ctx
 	assert.Nil(t, ctx.BecomeCandidate(common.HexToAddress("0x44d1ce0b7cb3588bca96151fe1bc05af38f91b6c")))
@@ -25,7 +25,7 @@ func TestContextSnapshot(t *testing.T) {
 	// revert snapshot
 	ctx.RevertToSnapShot(snapshot)
 	assert.Equal(t, ctx.Root(), snapshot.Root())
-	assert.NotEqual(t, ctx, snapshot)
+	assert.Equal(t, ctx, snapshot)
 }
 
 func TestContextBecomeCandidate(t *testing.T) {
@@ -35,7 +35,7 @@ func TestContextBecomeCandidate(t *testing.T) {
 		common.HexToAddress("0x4e080e49f62694554871e669aeb4ebe17c4a9670"),
 	}
 	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
-	ctx, err := NewContext(db)
+	ctx, err := NewEmptyContext(db)
 	assert.Nil(t, err)
 	for _, candidate := range candidates {
 		assert.Nil(t, ctx.BecomeCandidate(candidate))
@@ -59,7 +59,7 @@ func TestContextKickOutCandidate(t *testing.T) {
 		common.HexToAddress("0x4e080e49f62694554871e669aeb4ebe17c4a9670"),
 	}
 	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
-	ctx, err := NewContext(db)
+	ctx, err := NewEmptyContext(db)
 	assert.Nil(t, err)
 	for _, candidate := range candidates {
 		assert.Nil(t, ctx.BecomeCandidate(candidate))
@@ -97,7 +97,7 @@ func TestContextDelegateAndUnDelegate(t *testing.T) {
 	newCandidate := common.HexToAddress("0xa60a3886b552ff9992cfcd208ec1152079e046c2")
 	delegator := common.HexToAddress("0x4e080e49f62694554871e669aeb4ebe17c4a9670")
 	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
-	ctx, err := NewContext(db)
+	ctx, err := NewEmptyContext(db)
 	assert.Nil(t, err)
 	assert.Nil(t, ctx.BecomeCandidate(candidate))
 	assert.Nil(t, ctx.BecomeCandidate(newCandidate))
@@ -160,7 +160,7 @@ func TestContextValidators(t *testing.T) {
 	}
 
 	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
-	ctx, err := NewContext(db)
+	ctx, err := NewEmptyContext(db)
 	assert.Nil(t, err)
 
 	assert.Nil(t, ctx.SetValidators(validators))

@@ -34,7 +34,7 @@ func TestEpochContextCountVotes(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	stateDB, err := state.New(common.Hash{}, state.NewDatabase(db), nil)
 	assert.Nil(t, err)
-	ctx, err := NewContext(trie.NewDatabase(db))
+	ctx, err := NewEmptyContext(trie.NewDatabase(db))
 	assert.Nil(t, err)
 
 	epochContext := &EpochContext{
@@ -63,7 +63,7 @@ func TestEpochContextCountVotes(t *testing.T) {
 
 func TestLookupValidator(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	ctx, err := NewContext(trie.NewDatabase(db))
+	ctx, err := NewEmptyContext(trie.NewDatabase(db))
 	mockEpochContext := &EpochContext{
 		Context: ctx,
 	}
@@ -88,7 +88,7 @@ func TestLookupValidator(t *testing.T) {
 func TestEpochContextKickoutValidator(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db), nil)
-	ctx, err := NewContext(trie.NewDatabase(db))
+	ctx, err := NewEmptyContext(trie.NewDatabase(db))
 	assert.Nil(t, err)
 	epochContext := &EpochContext{
 		TimeStamp: epochInterval,
@@ -113,7 +113,7 @@ func TestEpochContextKickoutValidator(t *testing.T) {
 	assert.Equal(t, maxValidatorSize+1, len(candidateMap))
 
 	// atLeast a safeSize count candidate will reserve
-	ctx, err = NewContext(trie.NewDatabase(db))
+	ctx, err = NewEmptyContext(trie.NewDatabase(db))
 	assert.Nil(t, err)
 	epochContext = &EpochContext{
 		TimeStamp: epochInterval,
@@ -136,7 +136,7 @@ func TestEpochContextKickoutValidator(t *testing.T) {
 	}
 
 	// all validator will be kick-out, because all validators didn't mint enough block at least
-	ctx, err = NewContext(trie.NewDatabase(db))
+	ctx, err = NewEmptyContext(trie.NewDatabase(db))
 	assert.Nil(t, err)
 	epochContext = &EpochContext{
 		TimeStamp: epochInterval,
@@ -160,7 +160,7 @@ func TestEpochContextKickoutValidator(t *testing.T) {
 	assert.Equal(t, maxValidatorSize, len(candidateMap))
 
 	// only one validator mint count is not enough
-	ctx, err = NewContext(trie.NewDatabase(db))
+	ctx, err = NewEmptyContext(trie.NewDatabase(db))
 	assert.Nil(t, err)
 	epochContext = &EpochContext{
 		TimeStamp: epochInterval,
@@ -186,7 +186,7 @@ func TestEpochContextKickoutValidator(t *testing.T) {
 	assert.False(t, candidateMap[common.BytesToAddress([]byte("addr"+strconv.Itoa(0)))])
 
 	// epochTime is not complete, all validators mint enough block at least
-	ctx, err = NewContext(trie.NewDatabase(db))
+	ctx, err = NewEmptyContext(trie.NewDatabase(db))
 	assert.Nil(t, err)
 	epochContext = &EpochContext{
 		TimeStamp: epochInterval / 2,
@@ -210,7 +210,7 @@ func TestEpochContextKickoutValidator(t *testing.T) {
 	assert.Equal(t, maxValidatorSize*2, len(candidateMap))
 
 	// epochTime is not complete, all validators didn't mint enough block at least
-	ctx, err = NewContext(trie.NewDatabase(db))
+	ctx, err = NewEmptyContext(trie.NewDatabase(db))
 	assert.Nil(t, err)
 	epochContext = &EpochContext{
 		TimeStamp: epochInterval / 2,
@@ -233,7 +233,7 @@ func TestEpochContextKickoutValidator(t *testing.T) {
 	candidateMap = getCandidates(ctx.Trie())
 	assert.Equal(t, maxValidatorSize, len(candidateMap))
 
-	ctx, err = NewContext(trie.NewDatabase(db))
+	ctx, err = NewEmptyContext(trie.NewDatabase(db))
 	assert.Nil(t, err)
 	epochContext = &EpochContext{
 		TimeStamp: epochInterval / 2,
@@ -263,7 +263,7 @@ func getCandidates(cTrie *trie.Trie) map[common.Address]bool {
 func TestEpochContextTryElect(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db), nil)
-	ctx, err := NewContext(trie.NewDatabase(db))
+	ctx, err := NewEmptyContext(trie.NewDatabase(db))
 	assert.Nil(t, err)
 	epochContext := &EpochContext{
 		TimeStamp: epochInterval,
@@ -281,17 +281,18 @@ func TestEpochContextTryElect(t *testing.T) {
 		stateDB.SetBalance(validator, big.NewInt(1))
 		setTestMintCnt(ctx, testEpoch, validator, atLeastMintCnt-1)
 	}
-	ctx.BecomeCandidate(common.BytesToAddress([]byte("more")))
+	assert.Nil(t, ctx.BecomeCandidate(common.BytesToAddress([]byte("more"))))
 	assert.Nil(t, ctx.SetValidators(validators))
 
-	// genesisEpoch == parentEpoch do not kickout
+	oldHash := ctx.Trie().Hash()
+	// genesisEpoch == parentEpoch do not kick out
 	genesis := &types.Header{
 		Time: 0,
 	}
 	parent := &types.Header{
-		Time: epochInterval - blockInterval,
+		Time:       epochInterval - blockInterval,
+		EngineHash: oldHash,
 	}
-	oldHash := ctx.Trie().Hash()
 	assert.Nil(t, epochContext.tryElect(genesis, parent))
 	result, err := ctx.GetValidators()
 	assert.Nil(t, err)
@@ -316,7 +317,7 @@ func TestEpochContextTryElect(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, maxValidatorSize, len(result))
 	for _, validator := range result {
-		assert.True(t, strings.Contains(validator.String(), "addr"))
+		assert.True(t, strings.Contains(string(validator.Bytes()), "addr"))
 	}
 	assert.NotEqual(t, oldHash, ctx.Trie().Hash())
 
@@ -335,7 +336,7 @@ func TestEpochContextTryElect(t *testing.T) {
 	assert.Equal(t, safeSize, len(result))
 	moreCnt := 0
 	for _, validator := range result {
-		if strings.Contains(validator.String(), "more") {
+		if strings.Contains(string(validator.Bytes()), "more") {
 			moreCnt++
 		}
 	}

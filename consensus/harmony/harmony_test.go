@@ -63,14 +63,14 @@ func setMintCntTrie(epochID uint64, candidate common.Address, mintCntTrie *trie.
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 	cntBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(cntBytes, uint64(count))
-	mintCntTrie.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
+	mintCntTrie.TryUpdateWithPrefix(append(key, candidate.Bytes()...), cntBytes, mintCntPrefix)
 }
 
 func getMintCnt(epochID uint64, candidate common.Address, mintCntTrie *trie.Trie) int64 {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, epochID)
-	cntBytes := mintCntTrie.Get(append(key, candidate.Bytes()...))
-	if cntBytes == nil {
+	cntBytes, err := mintCntTrie.TryGetWithPrefix(append(key, candidate.Bytes()...), mintCntPrefix)
+	if cntBytes == nil || err != nil {
 		return 0
 	} else {
 		return int64(binary.BigEndian.Uint64(cntBytes))

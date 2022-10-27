@@ -98,31 +98,7 @@ func (h *Harmony) FinalizeAndAssemble(
 	uncles []*types.Header,
 	receipts []*types.Receipt,
 ) (*types.Block, error) {
-	// Accumulate block rewards and commit the final state root
-	AccumulateRewards(chain.Config(), state, header, uncles)
-	header.Root = state.IntermediateRoot(true)
-
-	parent := chain.GetHeaderByHash(header.ParentHash)
-	epochContext := &EpochContext{
-		stateDB:   state,
-		Context:   h.ctx,
-		TimeStamp: header.Time,
-	}
-	if timeOfFirstBlock == 0 {
-		if firstBlockHeader := chain.GetHeaderByNumber(1); firstBlockHeader != nil {
-			timeOfFirstBlock = firstBlockHeader.Time
-		}
-	}
-	genesis := chain.GetHeaderByNumber(0)
-	err := epochContext.tryElect(genesis, parent)
-	if err != nil {
-		log.Debug("got error when elect next epoch,", "err:", err)
-		return nil, err
-	}
-
-	//update mint count trie
-	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
-	header.EngineHash = h.ctx.Trie().Hash()
+	h.Finalize(chain, header, state, txs, uncles)
 	return types.NewBlock(header, txs, uncles, receipts, trie.NewStackTrie(nil)), nil
 }
 
@@ -131,7 +107,6 @@ func (h *Harmony) SealHash(header *types.Header) common.Hash {
 }
 
 func (h *Harmony) Close() error {
-	//TODO implement me
 	return nil
 }
 
@@ -173,7 +148,7 @@ func sigHash(header *types.Header) (hash common.Hash) {
 func New(config *params.HarmonyConfig, engineDB ethdb.Database) *Harmony {
 	signatures, _ := lru.NewARC(inMemorySignatures)
 	tdb := trie.NewDatabase(engineDB)
-	ctx, _ := NewContext(tdb)
+	ctx, _ := NewEmptyContext(tdb)
 	return &Harmony{
 		config:     config,
 		db:         engineDB,
@@ -395,7 +370,7 @@ func (h *Harmony) Prepare(chain consensus.ChainHeaderReader, header *types.Heade
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Difficulty = h.CalcDifficulty(chain, header.Time, parent)
+	header.Difficulty = defaultDifficulty
 	header.Coinbase = h.signer
 	return nil
 }
@@ -412,10 +387,42 @@ func (h *Harmony) Finalize(
 	txs []*types.Transaction,
 	uncles []*types.Header,
 ) {
-	return
+	// Accumulate block rewards and commit the final state root
+	AccumulateRewards(chain.Config(), state, header, uncles)
+
+	parent := chain.GetHeaderByHash(header.ParentHash)
+	epochContext := &EpochContext{
+		stateDB:   state,
+		Context:   h.ctx,
+		TimeStamp: header.Time,
+	}
+	if timeOfFirstBlock == 0 {
+		if firstBlockHeader := chain.GetHeaderByNumber(1); firstBlockHeader != nil {
+			timeOfFirstBlock = firstBlockHeader.Time
+		}
+	}
+	genesis := chain.GetHeaderByNumber(0)
+	err := epochContext.tryElect(genesis, parent)
+	if err != nil {
+		log.Error("got error when elect next epoch,", "err", err)
+	}
+	//update mint count trie
+	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
+	if header.EngineHash, err = h.ctx.Commit(); err != nil {
+		log.Error("engine context commit", "err", err)
+	}
+	header.Root, err = state.Commit(true)
+	if err != nil {
+		log.Error("block commit", "err", err)
+	}
+	log.Warn(
+		"current Hashes",
+		"bn", header.Number,
+		"engine", header.EngineHash.String(),
+		"root", header.Root.String())
 }
 
-func (h *Harmony) checkDeadline(lastBlock *types.Block, now uint64) error {
+func checkDeadline(lastBlock *types.Block, now uint64) error {
 	prevSlot := PrevSlot(now)
 	nextSlot := NextSlot(now)
 	if lastBlock.Time() >= nextSlot {
@@ -429,7 +436,7 @@ func (h *Harmony) checkDeadline(lastBlock *types.Block, now uint64) error {
 }
 
 func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
-	if err := h.checkDeadline(lastBlock, now); err != nil {
+	if err := checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
 	ctx, err := NewContextFromHash(h.ctx.TDB(), lastBlock.Header().EngineHash)
@@ -458,24 +465,31 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	}
 	now := uint64(time.Now().Unix())
 	delay := NextSlot(now) - now
-	sealing := func() *types.Block {
-		block.Header().Time = uint64(time.Now().Unix())
-		// time's up, sign the block
-		sigHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(header).Bytes())
-		if err != nil {
-			log.Error("signFn error", "err", err)
-			return nil
-		}
-		copy(header.Extra[len(header.Extra)-extraSeal:], sigHash)
-		return block.WithSeal(header)
+
+	block.Header().Time = uint64(time.Now().Unix())
+	// time's up, sign the block
+	sigHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(header).Bytes())
+	if err != nil {
+		log.Error("signFn error", "err", err)
+		return nil
 	}
-	if delay > 0 {
+	copy(header.Extra[len(header.Extra)-extraSeal:], sigHash)
+
+	// Wait until sealing is terminated or delay timeout.
+	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
+	go func() {
 		select {
 		case <-stop:
+			return
 		case <-time.After(time.Duration(delay) * time.Second):
-		case results <- sealing():
 		}
-	}
+
+		select {
+		case results <- block.WithSeal(header):
+		default:
+			log.Warn("Sealing result is not read by miner", "sealhash", sigHash)
+		}
+	}()
 
 	return nil
 }
@@ -533,7 +547,6 @@ func NextSlot(now uint64) uint64 {
 
 // update counts in MintCntTrie for the miner of newBlock
 func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Address, ctx *Context) {
-	currentMintCntTrie := ctx.Trie()
 	currentEpoch := parentBlockTime / epochInterval
 	currentEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(currentEpochBytes, currentEpoch)
@@ -542,11 +555,11 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 	newEpoch := currentBlockTime / epochInterval
 	// still during the currentEpochID
 	if currentEpoch == newEpoch {
-		iter := trie.NewIterator(currentMintCntTrie.PrefixIterator(currentEpochBytes, mintCntPrefix))
+		iter := trie.NewIterator(ctx.trie.PrefixIterator(currentEpochBytes, mintCntPrefix))
 
 		// when current is not genesis, read last count from the MintCntTrie
 		if iter.Next() {
-			cntBytes, err := currentMintCntTrie.TryGetWithPrefix(append(currentEpochBytes, validator.Bytes()...), mintCntPrefix)
+			cntBytes, err := ctx.trie.TryGetWithPrefix(append(currentEpochBytes, validator.Bytes()...), mintCntPrefix)
 			if err != nil {
 				return
 			}

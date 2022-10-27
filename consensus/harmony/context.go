@@ -23,13 +23,14 @@ var (
 	votePrefix      = []byte("vote-")
 	CandidatePrefix = []byte("candidate-")
 	mintCntPrefix   = []byte("mintCnt-")
+	ownerHash       = common.HexToHash("harmony")
 )
 
 func NewTrie(root common.Hash, tdb *trie.Database) (*trie.Trie, error) {
-	return trie.New(common.Hash{}, root, tdb)
+	return trie.New(ownerHash, root, tdb)
 }
 
-func NewContext(tdb *trie.Database) (*Context, error) {
+func NewEmptyContext(tdb *trie.Database) (*Context, error) {
 	return NewContextFromHash(tdb, common.Hash{})
 }
 
@@ -46,7 +47,7 @@ func NewContextFromHash(tdb *trie.Database, rootHash common.Hash) (*Context, err
 
 func (c *Context) Copy() *Context {
 	return &Context{
-		trie: c.trie,
+		trie: c.trie.Copy(),
 		tdb:  c.tdb,
 	}
 }
@@ -67,7 +68,7 @@ func (c *Context) RevertToSnapShot(snapshot *Context) {
 	c.tdb = snapshot.tdb
 }
 
-func (c *Context) FromHash(rootHash common.Hash) error {
+func (c *Context) RefreshFromHash(rootHash common.Hash) error {
 	var err error
 	c.trie, err = NewTrie(rootHash, c.tdb)
 	return err
@@ -179,11 +180,11 @@ func (c *Context) Commit() (common.Hash, error) {
 		nodeSet := trie.NewWithNodeSet(nodes)
 		err = c.TDB().Update(nodeSet)
 		if err != nil {
-			log.Warn("db update", "err", err)
+			log.Debug("engine Context update", "err", err)
 		}
 		err = c.TDB().Cap(0)
 		if err != nil {
-			log.Warn("db Cap", "err", err)
+			log.Warn("engine Context Cap", "err", err)
 		}
 	}
 	return rootHash, nil

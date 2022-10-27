@@ -51,7 +51,7 @@ type generatorStats struct {
 func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 	var ctx []interface{}
 	if root != (common.Hash{}) {
-		ctx = append(ctx, []interface{}{"root", root}...)
+		ctx = append(ctx, []interface{}{"root", root.String()}...)
 	}
 	// Figure out whether we're after or within an account
 	switch len(marker) {

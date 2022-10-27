@@ -355,9 +355,9 @@ func (g *Genesis) ToBlock() *types.Block {
 	var engineHash common.Hash
 	if g.Config.Harmony != nil {
 		engineDB := harmony.OpenDB()
+		defer engineDB.Close()
 		engineHash = initGenesisHarmonyContext(g, trie.NewDatabase(engineDB))
 		log.Warn("EngineHash", "is", engineHash.String())
-
 	}
 
 	head := &types.Header{

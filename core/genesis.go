@@ -281,7 +281,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 			genesis = DefaultGenesisBlock()
 		}
 		// Ensure the stored genesis matches with the given one.
-		hash := genesis.ToBlock().Hash()
+		hash := genesis.ToBlock(db).Hash()
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
@@ -294,7 +294,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 	}
 	// Check whether the genesis block is already written.
 	if genesis != nil {
-		hash := genesis.ToBlock().Hash()
+		hash := genesis.ToBlock(db).Hash()
 		if hash != stored {
 			return genesis.Config, hash, &GenesisMismatchError{stored, hash}
 		}
@@ -346,7 +346,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 }
 
 // ToBlock returns the genesis block according to genesis specification.
-func (g *Genesis) ToBlock() *types.Block {
+func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 	root, err := g.Alloc.deriveHash()
 	if err != nil {
 		panic(err)
@@ -354,10 +354,8 @@ func (g *Genesis) ToBlock() *types.Block {
 
 	var engineHash common.Hash
 	if g.Config.Harmony != nil {
-		engineDB := harmony.OpenDB()
-		defer engineDB.Close()
-		engineHash = initGenesisHarmonyContext(g, trie.NewDatabase(engineDB))
-		log.Warn("EngineHash", "is", engineHash.String())
+		engineHash = initGenesisHarmonyContext(g, db)
+		log.Warn("EngineHash value", "", engineHash.String())
 	}
 
 	head := &types.Header{
@@ -394,7 +392,7 @@ func (g *Genesis) ToBlock() *types.Block {
 // Commit writes the block and state of a genesis specification to the database.
 // The block is committed as the canonical head block.
 func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
-	block := g.ToBlock()
+	block := g.ToBlock(db)
 	if block.Number().Sign() != 0 {
 		return nil, errors.New("can't commit genesis block with number > 0")
 	}
@@ -442,7 +440,7 @@ func DefaultGenesisBlock() *Genesis {
 		Nonce:      66,
 		ExtraData:  hexutil.MustDecode("0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa"),
 		GasLimit:   5000,
-		Difficulty: big.NewInt(17179869184),
+		Difficulty: common.Big1,
 		Alloc:      decodePrealloc(mainnetAllocData),
 	}
 }
@@ -512,8 +510,14 @@ func decodePrealloc(data string) GenesisAlloc {
 	return ga
 }
 
-func initGenesisHarmonyContext(g *Genesis, db *trie.Database) common.Hash {
-	ctx, err := harmony.NewContextFromHash(db, common.Hash{})
+func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) common.Hash {
+	var tdb *trie.Database
+	if db == nil {
+		tdb = trie.NewDatabase(rawdb.NewMemoryDatabase())
+	} else {
+		tdb = trie.NewDatabase(db)
+	}
+	ctx, err := harmony.NewContextFromHash(tdb, common.Hash{})
 	if err != nil {
 		return types.EmptyRootHash
 	}

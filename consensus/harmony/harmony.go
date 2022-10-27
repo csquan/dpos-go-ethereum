@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"github.com/ethereum/go-ethereum/core/rawdb"
-	log2 "log"
 	"math/big"
 	"sync"
 	"time"
@@ -92,14 +90,6 @@ type Harmony struct {
 	stop chan bool
 }
 
-func OpenDB() ethdb.Database {
-	engineDB, err := rawdb.NewLevelDBDatabaseWithFreezer("engineDB", 0, 0, "", "harmony", false)
-	if err != nil {
-		log2.Fatalf("Create engineDB err: %v", err)
-	}
-	return engineDB
-}
-
 func (h *Harmony) FinalizeAndAssemble(
 	chain consensus.ChainHeaderReader,
 	header *types.Header,
@@ -180,9 +170,8 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-func New(config *params.HarmonyConfig) *Harmony {
+func New(config *params.HarmonyConfig, engineDB ethdb.Database) *Harmony {
 	signatures, _ := lru.NewARC(inMemorySignatures)
-	engineDB := OpenDB()
 	tdb := trie.NewDatabase(engineDB)
 	ctx, _ := NewContext(tdb)
 	return &Harmony{

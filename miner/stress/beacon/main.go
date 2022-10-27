@@ -236,7 +236,7 @@ func newNodeManager(genesis *core.Genesis) *nodeManager {
 	return &nodeManager{
 		close:        make(chan struct{}),
 		genesis:      genesis,
-		genesisBlock: genesis.ToBlock(),
+		genesisBlock: genesis.ToBlock(nil),
 	}
 }
 

@@ -766,9 +766,17 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
+	var engineSnap *harmony.Context // because of harmony commit to another database
+	ha, _ := w.engine.(*harmony.Harmony)
+	if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnDelegateTxType {
+		engineSnap = ha.Ctx().Snapshot()
+	}
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
+		if engineSnap != nil {
+			ha.Ctx().RevertToSnapShot(engineSnap)
+		}
 		return nil, err
 	}
 	env.txs = append(env.txs, tx)

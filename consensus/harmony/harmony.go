@@ -483,9 +483,8 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	if delay > 0 {
 		select {
 		case <-stop:
-			return nil
 		case <-time.After(time.Duration(delay) * time.Second):
-			results <- sealing()
+		case results <- sealing():
 		}
 	}
 

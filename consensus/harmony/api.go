@@ -51,12 +51,12 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 		return nil, errUnknownBlock
 	}
 
-	ctxTrie, err := NewTrie(header.EngineHash, trie.NewDatabase(api.engine.db))
+	ctxTrie, err := NewTrie(header.EngineInfo.EpochHash, trie.NewDatabase(api.engine.db))
 	if err != nil {
 		return nil, err
 	}
 	ctx := Context{}
-	ctx.SetTrie(ctxTrie)
+	ctx.SetEpochTrie(ctxTrie)
 	validators, err := ctx.GetValidators()
 	if err != nil {
 		return nil, err
@@ -92,14 +92,12 @@ func (api *API) GetDelegateList() (map[common.Address]common.Address, error) {
 		return nil, errUnknownBlock
 	}
 
-	ctxTrie, err := NewTrie(header.EngineHash, trie.NewDatabase(api.engine.db))
+	ctxTrie, err := NewTrie(header.EngineInfo.DelegateHash, trie.NewDatabase(api.engine.db))
 	if err != nil {
 		return nil, err
 	}
-	ctx := Context{}
-	ctx.SetTrie(ctxTrie)
 
-	iterDelegate := trie.NewIterator(ctxTrie.PrefixIterator(nil, DelegatePrefix))
+	iterDelegate := trie.NewIterator(ctxTrie.NodeIterator(nil))
 	existDelegate := iterDelegate.Next()
 	if !existDelegate {
 		//return delegates, errors.New("no delegates")
@@ -128,14 +126,12 @@ func (api *API) GetVoteList(number *rpc.BlockNumber) (map[common.Address]common.
 		return nil, errUnknownBlock
 	}
 
-	ctxTrie, err := NewTrie(header.EngineHash, trie.NewDatabase(api.engine.db))
+	voteTrie, err := NewTrie(header.EngineInfo.VoteHash, trie.NewDatabase(api.engine.db))
 	if err != nil {
 		return nil, err
 	}
-	ctx := Context{}
-	ctx.SetTrie(ctxTrie)
 
-	iterCandidate := trie.NewIterator(ctxTrie.PrefixIterator(nil, votePrefix))
+	iterCandidate := trie.NewIterator(voteTrie.NodeIterator(nil))
 	existCandidate := iterCandidate.Next()
 	if !existCandidate {
 		//return votes, errors.New("no candidates")
@@ -163,17 +159,15 @@ func (api *API) GetMintCnt(epochID int) (map[common.Address]uint64, error) {
 		return nil, errUnknownBlock
 	}
 
-	ctxTrie, err := NewTrie(header.EngineHash, trie.NewDatabase(api.engine.db))
+	mintTrie, err := NewTrie(header.EngineInfo.MintCntHash, trie.NewDatabase(api.engine.db))
 	if err != nil {
 		return nil, err
 	}
-	ctx := Context{}
-	ctx.SetTrie(ctxTrie)
 
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 
-	iterMint := trie.NewIterator(ctxTrie.PrefixIterator(key, mintCntPrefix))
+	iterMint := trie.NewIterator(mintTrie.NodeIterator(key))
 	existMint := iterMint.Next()
 	if !existMint {
 		//return nil, errors.New("no candidates")
@@ -214,18 +208,16 @@ func (api *API) GetValidatorMintCnt(epochID int, addr string) (uint64, error) {
 		return 0, errUnknownBlock
 	}
 
-	ctxTrie, err := NewTrie(header.EngineHash, trie.NewDatabase(api.engine.db))
+	mintTrie, err := NewTrie(header.EngineInfo.MintCntHash, trie.NewDatabase(api.engine.db))
 	if err != nil {
 		return 0, err
 	}
-	ctx := Context{}
-	ctx.SetTrie(ctxTrie)
 
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 	validator := common.HexToAddress(addr)
 
-	cntBytes, err := ctxTrie.TryGetWithPrefix(append(key, validator.Bytes()...), mintCntPrefix)
+	cntBytes, err := mintTrie.TryGet(append(key, validator.Bytes()...))
 	if cntBytes != nil {
 		count = binary.BigEndian.Uint64(cntBytes)
 	}
@@ -243,15 +235,12 @@ func (api *API) GetCandidates() ([]common.Address, error) {
 		return nil, errUnknownBlock
 	}
 
-	ctxTrie, err := NewTrie(header.EngineHash, trie.NewDatabase(api.engine.db))
+	candidateTrie, err := NewTrie(header.EngineInfo.CandidateHash, trie.NewDatabase(api.engine.db))
 	if err != nil {
 		return nil, err
 	}
 
-	ctx := Context{}
-	ctx.SetTrie(ctxTrie)
-
-	iterCandidates := trie.NewIterator(ctxTrie.PrefixIterator(nil, CandidatePrefix))
+	iterCandidates := trie.NewIterator(candidateTrie.NodeIterator(nil))
 	existCandidate := iterCandidates.Next()
 	if !existCandidate {
 		//return nil, errors.New("no candidates")

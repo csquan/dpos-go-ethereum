@@ -127,7 +127,7 @@ func sigHash(header *types.Header) (hash common.Hash) {
 		header.ParentHash,
 		header.UncleHash,
 		header.Coinbase,
-		header.EngineHash,
+		header.EngineInfo,
 		header.Root,
 		header.TxHash,
 		header.ReceiptHash,
@@ -261,7 +261,7 @@ func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, 
 	} else {
 		prevHeader = chain.GetHeader(header.ParentHash, number-1)
 	}
-	ctx, err := NewContextFromHash(h.ctx.TDB(), prevHeader.EngineHash)
+	ctx, err := NewContextFromHash(h.ctx.TDB(), prevHeader.EngineInfo)
 	if err != nil {
 		return err
 	}
@@ -408,7 +408,7 @@ func (h *Harmony) Finalize(
 	}
 	//update mint count trie
 	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
-	if header.EngineHash, err = h.ctx.Commit(); err != nil {
+	if header.EngineInfo, err = h.ctx.Commit(); err != nil {
 		log.Error("engine context commit", "err", err)
 	}
 	header.Root, err = state.Commit(true)
@@ -418,7 +418,7 @@ func (h *Harmony) Finalize(
 	log.Warn(
 		"current Hashes",
 		"bn", header.Number,
-		"engine", header.EngineHash.String(),
+		"engine", header.EngineInfo.String(),
 		"root", header.Root.String())
 }
 
@@ -439,7 +439,7 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 	if err := checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	ctx, err := NewContextFromHash(h.ctx.TDB(), lastBlock.Header().EngineHash)
+	ctx, err := NewContextFromHash(h.ctx.TDB(), lastBlock.Header().EngineInfo)
 	if err != nil {
 		return err
 	}
@@ -555,11 +555,11 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 	newEpoch := currentBlockTime / epochInterval
 	// still during the currentEpochID
 	if currentEpoch == newEpoch {
-		iter := trie.NewIterator(ctx.trie.PrefixIterator(currentEpochBytes, mintCntPrefix))
+		iter := trie.NewIterator(ctx.mintCntTrie.NodeIterator(currentEpochBytes))
 
 		// when current is not genesis, read last count from the MintCntTrie
 		if iter.Next() {
-			cntBytes, err := ctx.trie.TryGetWithPrefix(append(currentEpochBytes, validator.Bytes()...), mintCntPrefix)
+			cntBytes, err := ctx.mintCntTrie.TryGet(append(currentEpochBytes, validator.Bytes()...))
 			if err != nil {
 				return
 			}
@@ -574,5 +574,5 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 	newEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(newEpochBytes, newEpoch)
 	binary.BigEndian.PutUint64(newCntBytes, cnt)
-	ctx.trie.TryUpdateWithPrefix(append(newEpochBytes, validator.Bytes()...), newCntBytes, mintCntPrefix)
+	ctx.mintCntTrie.Update(append(newEpochBytes, validator.Bytes()...), newCntBytes)
 }

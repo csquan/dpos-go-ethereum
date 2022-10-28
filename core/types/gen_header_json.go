@@ -19,7 +19,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		ParentHash  common.Hash    `json:"parentHash"       gencodec:"required"`
 		UncleHash   common.Hash    `json:"sha3Uncles"       gencodec:"required"`
 		Coinbase    common.Address `json:"miner"`
-		EngineHash  common.Hash    `json:"engineHash"       gencodec:"required"`
+		EngineInfo  EngineInfo     `json:"engineInfo"       gencodec:"required"`
 		Root        common.Hash    `json:"stateRoot"        gencodec:"required"`
 		TxHash      common.Hash    `json:"transactionsRoot" gencodec:"required"`
 		ReceiptHash common.Hash    `json:"receiptsRoot"     gencodec:"required"`
@@ -39,7 +39,7 @@ func (h Header) MarshalJSON() ([]byte, error) {
 	enc.ParentHash = h.ParentHash
 	enc.UncleHash = h.UncleHash
 	enc.Coinbase = h.Coinbase
-	enc.EngineHash = h.EngineHash
+	enc.EngineInfo = h.EngineInfo
 	enc.Root = h.Root
 	enc.TxHash = h.TxHash
 	enc.ReceiptHash = h.ReceiptHash
@@ -63,7 +63,7 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		ParentHash  *common.Hash    `json:"parentHash"       gencodec:"required"`
 		UncleHash   *common.Hash    `json:"sha3Uncles"       gencodec:"required"`
 		Coinbase    *common.Address `json:"miner"`
-		EngineHash  *common.Hash    `json:"engineHash"       gencodec:"required"`
+		EngineInfo  *EngineInfo     `json:"engineInfo"       gencodec:"required"`
 		Root        *common.Hash    `json:"stateRoot"        gencodec:"required"`
 		TxHash      *common.Hash    `json:"transactionsRoot" gencodec:"required"`
 		ReceiptHash *common.Hash    `json:"receiptsRoot"     gencodec:"required"`
@@ -93,10 +93,10 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 	if dec.Coinbase != nil {
 		h.Coinbase = *dec.Coinbase
 	}
-	if dec.EngineHash == nil {
-		return errors.New("missing required field 'engineHash' for Header")
+	if dec.EngineInfo == nil {
+		return errors.New("missing required field 'engineInfo' for Header")
 	}
-	h.EngineHash = *dec.EngineHash
+	h.EngineInfo = *dec.EngineInfo
 	if dec.Root == nil {
 		return errors.New("missing required field 'stateRoot' for Header")
 	}

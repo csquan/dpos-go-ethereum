@@ -37,7 +37,7 @@ var (
 )
 
 func mockNewContext(db *trie.Database) *Context {
-	ctx, err := NewContextFromHash(db, common.Hash{})
+	ctx, err := NewEmptyContext(db)
 	if err != nil {
 		return nil
 	}
@@ -51,9 +51,9 @@ func mockNewContext(db *trie.Database) *Context {
 	for j := 0; j < len(MockEpoch); j++ {
 		delegator = common.HexToAddress(MockEpoch[j]).Bytes()
 		candidate = common.HexToAddress(MockEpoch[j]).Bytes()
-		ctx.trie.TryUpdateWithPrefix(append(candidate, delegator...), candidate, DelegatePrefix)
-		ctx.trie.TryUpdateWithPrefix(candidate, candidate, CandidatePrefix)
-		ctx.trie.TryUpdateWithPrefix(candidate, candidate, votePrefix)
+		ctx.delegateTrie.TryUpdate(append(candidate, delegator...), candidate)
+		ctx.candidateTrie.TryUpdate(candidate, candidate)
+		ctx.voteTrie.TryUpdate(candidate, candidate)
 	}
 	return ctx
 }
@@ -63,13 +63,13 @@ func setMintCntTrie(epochID uint64, candidate common.Address, mintCntTrie *trie.
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 	cntBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(cntBytes, uint64(count))
-	mintCntTrie.TryUpdateWithPrefix(append(key, candidate.Bytes()...), cntBytes, mintCntPrefix)
+	mintCntTrie.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
 }
 
 func getMintCnt(epochID uint64, candidate common.Address, mintCntTrie *trie.Trie) int64 {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, epochID)
-	cntBytes, err := mintCntTrie.TryGetWithPrefix(append(key, candidate.Bytes()...), mintCntPrefix)
+	cntBytes, err := mintCntTrie.TryGet(append(key, candidate.Bytes()...))
 	if cntBytes == nil || err != nil {
 		return 0
 	} else {
@@ -87,30 +87,30 @@ func TestUpdateMintCnt(t *testing.T) {
 	miner := common.HexToAddress("0xa60a3886b552ff9992cfcd208ec1152079e046c2")
 	blockTime := epochInterval + blockInterval
 
-	beforeUpdateCnt := getMintCnt(blockTime/epochInterval, miner, ctx.trie)
+	beforeUpdateCnt := getMintCnt(blockTime/epochInterval, miner, ctx.mintCntTrie)
 	updateMintCnt(lastTime, blockTime, miner, ctx)
-	afterUpdateCnt := getMintCnt(blockTime/epochInterval, miner, ctx.trie)
+	afterUpdateCnt := getMintCnt(blockTime/epochInterval, miner, ctx.mintCntTrie)
 	assert.Equal(t, int64(0), beforeUpdateCnt)
 	assert.Equal(t, int64(1), afterUpdateCnt)
 
 	// new block still in the same epoch with current block, and newMiner has mint block before in the epoch
-	setMintCntTrie(blockTime/epochInterval, miner, ctx.trie, int64(1))
+	setMintCntTrie(blockTime/epochInterval, miner, ctx.mintCntTrie, int64(1))
 
 	blockTime = epochInterval + blockInterval*4
 
 	// currentBlock has recorded the count for the newMiner before UpdateMintCnt
-	beforeUpdateCnt = getMintCnt(blockTime/epochInterval, miner, ctx.trie)
+	beforeUpdateCnt = getMintCnt(blockTime/epochInterval, miner, ctx.mintCntTrie)
 	updateMintCnt(lastTime, blockTime, miner, ctx)
-	afterUpdateCnt = getMintCnt(blockTime/epochInterval, miner, ctx.trie)
+	afterUpdateCnt = getMintCnt(blockTime/epochInterval, miner, ctx.mintCntTrie)
 	assert.Equal(t, int64(1), beforeUpdateCnt)
 	assert.Equal(t, int64(2), afterUpdateCnt)
 
 	// new block come to a new epoch
 	blockTime = epochInterval * 2
 
-	beforeUpdateCnt = getMintCnt(blockTime/epochInterval, miner, ctx.trie)
+	beforeUpdateCnt = getMintCnt(blockTime/epochInterval, miner, ctx.mintCntTrie)
 	updateMintCnt(lastTime, blockTime, miner, ctx)
-	afterUpdateCnt = getMintCnt(blockTime/epochInterval, miner, ctx.trie)
+	afterUpdateCnt = getMintCnt(blockTime/epochInterval, miner, ctx.mintCntTrie)
 	assert.Equal(t, int64(0), beforeUpdateCnt)
 	assert.Equal(t, int64(1), afterUpdateCnt)
 }

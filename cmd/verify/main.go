@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -40,10 +41,15 @@ func newDB(name string) ethdb.Database {
 }
 
 func verifyHarmony(db ethdb.Database) error {
-	engineHash := common.HexToHash("0x76596dd2d82a0176f024e40c027df92fd694b7d19a712b8c236e4d3d064f5428")
-	ctx, err := harmony.NewContextFromHash(trie.NewDatabase(db), engineHash)
+	tdb := trie.NewDatabase(db)
+	epochHash := common.HexToHash("0x76596dd2d82a0176f024e40c027df92fd694b7d19a712b8c236e4d3d064f5428")
+	candidateHash := common.HexToHash("")
+	engineInfo := types.EngineInfo{
+		common.Hash{}, epochHash, common.Hash{}, candidateHash, common.Hash{},
+	}
+	ctx, err := harmony.NewContextFromHash(tdb, engineInfo)
 	if err != nil {
-		log.Error("new context", "err", err)
+		log.Error("new epochTrie", "err", err)
 		return err
 	}
 	validators, err := ctx.GetValidators()
@@ -55,7 +61,7 @@ func verifyHarmony(db ethdb.Database) error {
 		log.Error("validators length", "err", err)
 		return err
 	}
-	iterCandidate := trie.NewIterator(ctx.Trie().PrefixIterator(nil, harmony.CandidatePrefix))
+	iterCandidate := trie.NewIterator(ctx.CandidateTrie().NodeIterator(nil))
 	existCandidate := iterCandidate.Next()
 	if !existCandidate {
 		log.Error("no candidates")
@@ -102,7 +108,7 @@ func main1() {
 }
 
 func insert(db ethdb.Database, prefix bool) error {
-	ctx, err := harmony.NewContextFromHash(trie.NewDatabase(db), common.Hash{})
+	ti, err := harmony.NewTrie(common.Hash{}, trie.NewDatabase(db))
 	if err != nil {
 		log.Error("new context", "err", err)
 		return err
@@ -111,16 +117,19 @@ func insert(db ethdb.Database, prefix bool) error {
 		byt := make([]byte, 8)
 		binary.BigEndian.PutUint64(byt, uint64(i))
 		if !prefix {
-			if err := ctx.Trie().TryUpdate(byt, byt); err != nil {
+			if err := ti.TryUpdate(byt, byt); err != nil {
 				log.Error("updating", "err", err)
 			}
 		} else {
-			if err := ctx.Trie().TryUpdateWithPrefix(byt, byt, prefixCandidate); err != nil {
+			if err := ti.TryUpdateWithPrefix(byt, byt, prefixCandidate); err != nil {
 				log.Error("updating", "err", err)
 			}
 		}
 	}
-	if root, err := ctx.Commit(); err != nil {
+	if root, nodes, err := ti.Commit(true); err != nil {
+		if nodes != nil {
+
+		}
 		log.Error("committing", "err", err)
 		return err
 	} else {
@@ -142,16 +151,16 @@ func mainGen() {
 
 func count(db ethdb.Database, hash string, prefix bool) error {
 	engineHash := common.HexToHash(hash)
-	ctx, err := harmony.NewContextFromHash(trie.NewDatabase(db), engineHash)
+	ti, err := harmony.NewTrie(engineHash, trie.NewDatabase(db))
 	if err != nil {
 		log.Error("new context", "err", err)
 		return err
 	}
 	var it *trie.Iterator
 	if prefix {
-		it = trie.NewIterator(ctx.Trie().PrefixIterator(nil, prefixCandidate))
+		it = trie.NewIterator(ti.PrefixIterator(nil, prefixCandidate))
 	} else {
-		it = trie.NewIterator(ctx.Trie().NodeIterator(nil))
+		it = trie.NewIterator(ti.NodeIterator(nil))
 	}
 	count := 0
 	for {

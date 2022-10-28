@@ -14,7 +14,13 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.ParentHash[:])
 	w.WriteBytes(obj.UncleHash[:])
 	w.WriteBytes(obj.Coinbase[:])
-	w.WriteBytes(obj.EngineHash[:])
+	_tmp1 := w.List()
+	w.WriteBytes(obj.EngineInfo.VoteHash[:])
+	w.WriteBytes(obj.EngineInfo.EpochHash[:])
+	w.WriteBytes(obj.EngineInfo.DelegateHash[:])
+	w.WriteBytes(obj.EngineInfo.CandidateHash[:])
+	w.WriteBytes(obj.EngineInfo.MintCntHash[:])
+	w.ListEnd(_tmp1)
 	w.WriteBytes(obj.Root[:])
 	w.WriteBytes(obj.TxHash[:])
 	w.WriteBytes(obj.ReceiptHash[:])
@@ -41,8 +47,8 @@ func (obj *Header) EncodeRLP(_w io.Writer) error {
 	w.WriteBytes(obj.Extra)
 	w.WriteBytes(obj.MixDigest[:])
 	w.WriteBytes(obj.Nonce[:])
-	_tmp1 := obj.BaseFee != nil
-	if _tmp1 {
+	_tmp2 := obj.BaseFee != nil
+	if _tmp2 {
 		if obj.BaseFee == nil {
 			w.Write(rlp.EmptyString)
 		} else {

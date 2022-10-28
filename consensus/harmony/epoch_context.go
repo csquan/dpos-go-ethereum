@@ -25,10 +25,11 @@ type EpochContext struct {
 // countVotes
 func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err error) {
 	votes = map[common.Address]*big.Int{}
-	ctxTrie := ec.Context.Trie()
+	delegateTrie := ec.Context.delegateTrie
+	candidateTrie := ec.Context.candidateTrie
 	stateDB := ec.stateDB
 
-	iterCandidate := trie.NewIterator(ctxTrie.PrefixIterator(nil, CandidatePrefix))
+	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
 	existCandidate := iterCandidate.Next()
 	if !existCandidate {
 		return votes, errors.New("no candidates")
@@ -36,7 +37,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	for existCandidate {
 		candidate := iterCandidate.Value
 		candidateAddr := common.BytesToAddress(candidate)
-		delegateIterator := trie.NewIterator(ctxTrie.PrefixIterator(candidate, DelegatePrefix))
+		delegateIterator := trie.NewIterator(delegateTrie.NodeIterator(candidate))
 		existDelegator := delegateIterator.Next()
 		if !existDelegator {
 			votes[candidateAddr] = new(big.Int)
@@ -88,7 +89,7 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 		binary.BigEndian.PutUint64(key, epoch)
 		key = append(key, validator.Bytes()...)
 		cnt := uint64(0)
-		if cntBytes, err := ec.Context.Trie().TryGetWithPrefix(key, mintCntPrefix); err == nil && cntBytes != nil {
+		if cntBytes, err := ec.Context.mintCntTrie.TryGet(key); err == nil && cntBytes != nil {
 			cnt = binary.BigEndian.Uint64(cntBytes)
 		}
 		if cnt < epochDuration/blockInterval/maxValidatorSize/2 {
@@ -104,7 +105,7 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 	sort.Sort(sort.Reverse(needKickOutValidators))
 
 	candidateCount := 0
-	iter := trie.NewIterator(ec.Context.Trie().PrefixIterator(nil, CandidatePrefix))
+	iter := trie.NewIterator(ec.Context.candidateTrie.NodeIterator(nil))
 	for iter.Next() {
 		candidateCount++
 		if candidateCount >= needKickOutValidatorCnt+safeSize {
@@ -161,7 +162,12 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, prevEpoch)
-	iter := trie.NewIterator(ec.Context.Trie().PrefixIterator(prevEpochBytes, mintCntPrefix))
+	var ctx *Context
+	var err error
+	if ctx, err = NewContextFromHash(ec.Context.tdb, parent.EngineInfo); err != nil {
+		return err
+	}
+	iter := trie.NewIterator(ctx.mintCntTrie.NodeIterator(prevEpochBytes))
 	for i := prevEpoch; i < currentEpoch; i++ {
 		// if prevEpoch is not genesis, kick-out not active candidate
 		if !prevEpochIsGenesis && iter.Next() {

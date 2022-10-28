@@ -352,10 +352,10 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		panic(err)
 	}
 
-	var engineHash common.Hash
+	var engineInfo *types.EngineInfo
 	if g.Config.Harmony != nil {
-		engineHash = initGenesisHarmonyContext(g, db)
-		log.Warn("EngineHash value", "hash", engineHash.String())
+		engineInfo = initGenesisHarmonyContext(g, db)
+		log.Warn("EngineHash value", "hash", engineInfo.String())
 	}
 
 	head := &types.Header{
@@ -363,7 +363,7 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		Nonce:      types.EncodeNonce(g.Nonce),
 		Time:       g.Timestamp,
 		ParentHash: g.ParentHash,
-		EngineHash: engineHash,
+		EngineInfo: *engineInfo,
 		Extra:      g.ExtraData,
 		GasLimit:   g.GasLimit,
 		GasUsed:    g.GasUsed,
@@ -510,7 +510,7 @@ func decodePrealloc(data string) GenesisAlloc {
 	return ga
 }
 
-func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) common.Hash {
+func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) *types.EngineInfo {
 	var tdb *trie.Database
 	if db == nil {
 		tdb = trie.NewDatabase(rawdb.NewMemoryDatabase())
@@ -520,25 +520,25 @@ func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) common.Hash {
 	ctx, err := harmony.NewEmptyContext(tdb)
 	if err != nil {
 		log.Error("create empty ctx error", "err", err)
-		return types.EmptyRootHash
+		return nil
 	}
 	if g.Config != nil && g.Config.Harmony != nil && g.Config.Harmony.Validators != nil {
 		if err := ctx.SetValidators(g.Config.Harmony.Validators); err != nil {
 			log.Error("SetValidators", "err", err)
 		}
 		for _, validator := range g.Config.Harmony.Validators {
-			if err := ctx.Trie().TryUpdateWithPrefix(validator.Bytes(), validator.Bytes(), harmony.CandidatePrefix); err != nil {
+			if err := ctx.CandidateTrie().TryUpdate(validator.Bytes(), validator.Bytes()); err != nil {
 				log.Error("Update Candidates", "err", err)
 			}
-			if err := ctx.Trie().TryUpdateWithPrefix(append(validator.Bytes(), validator.Bytes()...), validator.Bytes(), harmony.DelegatePrefix); err != nil {
+			if err := ctx.DelegateTrie().TryUpdate(append(validator.Bytes(), validator.Bytes()...), validator.Bytes()); err != nil {
 				log.Error("Update Delegates", "err", err)
 			}
 		}
 	}
 	if hash, err := ctx.Commit(); err != nil {
 		log.Error("Commit error", "err", err)
-		return types.EmptyRootHash
+		return nil
 	} else {
-		return hash
+		return &hash
 	}
 }

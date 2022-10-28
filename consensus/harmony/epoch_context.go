@@ -13,7 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 type EpochContext struct {
@@ -29,7 +28,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	candidateTrie := ec.Context.candidateTrie
 	stateDB := ec.stateDB
 
-	iterCandidate := trie.NewIterator(candidateTrie.NodeIterator(nil))
+	iterCandidate := candidateTrie.Iterator(nil)
 	existCandidate := iterCandidate.Next()
 	if !existCandidate {
 		return votes, errors.New("no candidates")
@@ -37,7 +36,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	for existCandidate {
 		candidate := iterCandidate.Value
 		candidateAddr := common.BytesToAddress(candidate)
-		delegateIterator := trie.NewIterator(delegateTrie.NodeIterator(candidate))
+		delegateIterator := delegateTrie.Iterator(candidate)
 		existDelegator := delegateIterator.Next()
 		if !existDelegator {
 			votes[candidateAddr] = new(big.Int)
@@ -89,7 +88,7 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 		binary.BigEndian.PutUint64(key, epoch)
 		key = append(key, validator.Bytes()...)
 		cnt := uint64(0)
-		if cntBytes, err := ec.Context.mintCntTrie.TryGet(key); err == nil && cntBytes != nil {
+		if cntBytes, err := ec.Context.mintCntTrie.t.TryGet(key); err == nil && cntBytes != nil {
 			cnt = binary.BigEndian.Uint64(cntBytes)
 		}
 		if cnt < epochDuration/blockInterval/maxValidatorSize/2 {
@@ -105,7 +104,7 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 	sort.Sort(sort.Reverse(needKickOutValidators))
 
 	candidateCount := 0
-	iter := trie.NewIterator(ec.Context.candidateTrie.NodeIterator(nil))
+	iter := ec.Context.candidateTrie.Iterator(nil)
 	for iter.Next() {
 		candidateCount++
 		if candidateCount >= needKickOutValidatorCnt+safeSize {
@@ -162,20 +161,22 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, prevEpoch)
-	var ctx *Context
-	var err error
-	if ctx, err = NewContextFromHash(ec.Context.tdb, parent.EngineInfo); err != nil {
+	var ecTemp *EpochContext
+
+	if ctx, err := NewContextFromHash(ec.Context.EDB(), parent.EngineInfo); err != nil {
 		return err
+	} else {
+		ecTemp = &EpochContext{Context: ctx, stateDB: ec.stateDB}
 	}
-	iter := trie.NewIterator(ctx.mintCntTrie.NodeIterator(prevEpochBytes))
+	iter := ecTemp.Context.mintCntTrie.Iterator(prevEpochBytes)
 	for i := prevEpoch; i < currentEpoch; i++ {
 		// if prevEpoch is not genesis, kick-out not active candidate
 		if !prevEpochIsGenesis && iter.Next() {
-			if err := ec.kickOutValidator(prevEpoch); err != nil {
+			if err := ecTemp.kickOutValidator(prevEpoch); err != nil {
 				return err
 			}
 		}
-		votes, err := ec.countVotes()
+		votes, err := ecTemp.countVotes()
 		if err != nil {
 			return err
 		}

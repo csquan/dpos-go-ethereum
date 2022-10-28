@@ -511,13 +511,10 @@ func decodePrealloc(data string) GenesisAlloc {
 }
 
 func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) *types.EngineInfo {
-	var tdb *trie.Database
 	if db == nil {
-		tdb = trie.NewDatabase(rawdb.NewMemoryDatabase())
-	} else {
-		tdb = trie.NewDatabase(db)
+		db = rawdb.NewMemoryDatabase()
 	}
-	ctx, err := harmony.NewEmptyContext(tdb)
+	ctx, err := harmony.NewEmptyContext(db)
 	if err != nil {
 		log.Error("create empty ctx error", "err", err)
 		return nil

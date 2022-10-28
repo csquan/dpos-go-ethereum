@@ -147,8 +147,7 @@ func sigHash(header *types.Header) (hash common.Hash) {
 
 func New(config *params.HarmonyConfig, engineDB ethdb.Database) *Harmony {
 	signatures, _ := lru.NewARC(inMemorySignatures)
-	tdb := trie.NewDatabase(engineDB)
-	ctx, _ := NewEmptyContext(tdb)
+	ctx, _ := NewEmptyContext(engineDB)
 	return &Harmony{
 		config:     config,
 		db:         engineDB,
@@ -261,7 +260,7 @@ func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, 
 	} else {
 		prevHeader = chain.GetHeader(header.ParentHash, number-1)
 	}
-	ctx, err := NewContextFromHash(h.ctx.TDB(), prevHeader.EngineInfo)
+	ctx, err := NewContextFromHash(h.ctx.EDB(), prevHeader.EngineInfo)
 	if err != nil {
 		return err
 	}
@@ -439,7 +438,7 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 	if err := checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	ctx, err := NewContextFromHash(h.ctx.TDB(), lastBlock.Header().EngineInfo)
+	ctx, err := NewContextFromHash(h.ctx.EDB(), lastBlock.Header().EngineInfo)
 	if err != nil {
 		return err
 	}
@@ -555,11 +554,11 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 	newEpoch := currentBlockTime / epochInterval
 	// still during the currentEpochID
 	if currentEpoch == newEpoch {
-		iter := trie.NewIterator(ctx.mintCntTrie.NodeIterator(currentEpochBytes))
+		iter := ctx.mintCntTrie.Iterator(currentEpochBytes)
 
 		// when current is not genesis, read last count from the MintCntTrie
 		if iter.Next() {
-			cntBytes, err := ctx.mintCntTrie.TryGet(append(currentEpochBytes, validator.Bytes()...))
+			cntBytes, err := ctx.mintCntTrie.t.TryGet(append(currentEpochBytes, validator.Bytes()...))
 			if err != nil {
 				return
 			}
@@ -574,5 +573,5 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 	newEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(newEpochBytes, newEpoch)
 	binary.BigEndian.PutUint64(newCntBytes, cnt)
-	ctx.mintCntTrie.Update(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+	ctx.mintCntTrie.t.Update(append(newEpochBytes, validator.Bytes()...), newCntBytes)
 }

@@ -2,11 +2,11 @@ package harmony
 
 import (
 	"encoding/binary"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/rawdb"
-	"github.com/ethereum/go-ethereum/trie"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -36,7 +36,7 @@ var (
 	}
 )
 
-func mockNewContext(db *trie.Database) *Context {
+func mockNewContext(db ethdb.Database) *Context {
 	ctx, err := NewEmptyContext(db)
 	if err != nil {
 		return nil
@@ -51,25 +51,25 @@ func mockNewContext(db *trie.Database) *Context {
 	for j := 0; j < len(MockEpoch); j++ {
 		delegator = common.HexToAddress(MockEpoch[j]).Bytes()
 		candidate = common.HexToAddress(MockEpoch[j]).Bytes()
-		ctx.delegateTrie.TryUpdate(append(candidate, delegator...), candidate)
-		ctx.candidateTrie.TryUpdate(candidate, candidate)
-		ctx.voteTrie.TryUpdate(candidate, candidate)
+		ctx.delegateTrie.t.TryUpdate(append(candidate, delegator...), candidate)
+		ctx.candidateTrie.t.TryUpdate(candidate, candidate)
+		ctx.voteTrie.t.TryUpdate(candidate, candidate)
 	}
 	return ctx
 }
 
-func setMintCntTrie(epochID uint64, candidate common.Address, mintCntTrie *trie.Trie, count int64) {
+func setMintCntTrie(epochID uint64, candidate common.Address, mintCntTrie *Trie, count int64) {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 	cntBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(cntBytes, uint64(count))
-	mintCntTrie.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
+	mintCntTrie.t.TryUpdate(append(key, candidate.Bytes()...), cntBytes)
 }
 
-func getMintCnt(epochID uint64, candidate common.Address, mintCntTrie *trie.Trie) int64 {
+func getMintCnt(epochID uint64, candidate common.Address, mintCntTrie *Trie) int64 {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, epochID)
-	cntBytes, err := mintCntTrie.TryGet(append(key, candidate.Bytes()...))
+	cntBytes, err := mintCntTrie.t.TryGet(append(key, candidate.Bytes()...))
 	if cntBytes == nil || err != nil {
 		return 0
 	} else {
@@ -78,7 +78,7 @@ func getMintCnt(epochID uint64, candidate common.Address, mintCntTrie *trie.Trie
 }
 
 func TestUpdateMintCnt(t *testing.T) {
-	db := trie.NewDatabase(rawdb.NewMemoryDatabase())
+	db := rawdb.NewMemoryDatabase()
 	ctx := mockNewContext(db)
 
 	// new block still in the same epoch with current block, but newMiner is the first time to mint in the epoch

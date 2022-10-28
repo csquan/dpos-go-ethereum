@@ -6,82 +6,143 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
 	"golang.org/x/crypto/sha3"
 )
 
-type Context struct {
-	voteTrie      *trie.Trie
-	epochTrie     *trie.Trie
-	delegateTrie  *trie.Trie
-	candidateTrie *trie.Trie
-	mintCntTrie   *trie.Trie
+type Trie struct {
+	t *trie.Trie
+	d *trie.Database
+}
 
-	tdb *trie.Database
+func (t *Trie) Copy() *Trie {
+	return &Trie{
+		t: t.t.Copy(),
+		d: trie.NewDatabase(t.d.DiskDB()),
+	}
+}
+
+func (t *Trie) Hash() common.Hash {
+	return t.t.Hash()
+}
+
+func (t *Trie) Iterator(k []byte) *trie.Iterator {
+	if k == nil {
+		return trie.NewIterator(t.t.NodeIterator(nil))
+	} else {
+		return trie.NewIterator(t.t.PrefixIterator(k))
+	}
+}
+
+func (t *Trie) TryUpdate(k, v []byte) error {
+	return t.t.TryUpdate(k, v)
+}
+
+type Context struct {
+	epochTrie     *Trie
+	candidateTrie *Trie
+	delegateTrie  *Trie
+	voteTrie      *Trie
+	mintCntTrie   *Trie
 }
 
 var (
-	ownerHash = common.HexToHash("harmony")
+	ownerEpoch     = common.BytesToHash([]byte("epoch"))
+	ownerCandidate = common.BytesToHash([]byte("candidate"))
+	ownerDelegate  = common.BytesToHash([]byte("delegate"))
+	ownerVote      = common.BytesToHash([]byte("vote"))
+	ownerMint      = common.BytesToHash([]byte("mint"))
 )
 
 func NewTrie(root common.Hash, tdb *trie.Database) (*trie.Trie, error) {
-	return trie.New(ownerHash, root, tdb)
+	return trie.New(common.Hash{}, root, tdb)
 }
 
-func NewEmptyContext(tdb *trie.Database) (*Context, error) {
-	return NewContextFromHash(tdb, types.EmptyEngineInfo)
+func newTrie(owner, root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
+	d := trie.NewDatabase(edb)
+	if t, err := trie.New(owner, root, d); err != nil {
+		return nil, err
+	} else {
+		return &Trie{
+			t: t,
+			d: d,
+		}, nil
+	}
 }
 
-func NewContextFromHash(tdb *trie.Database, info types.EngineInfo) (*Context, error) {
-	vote, err := NewTrie(info.VoteHash, tdb)
+func newEpochTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
+	return newTrie(ownerEpoch, root, edb)
+}
+
+func newCandidateTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
+	return newTrie(ownerCandidate, root, edb)
+}
+
+func newDelegateTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
+	return newTrie(ownerDelegate, root, edb)
+}
+
+func newVoteTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
+	return newTrie(ownerVote, root, edb)
+}
+
+func newMintTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
+	return newTrie(ownerMint, root, edb)
+}
+
+func NewEmptyContext(edb ethdb.KeyValueStore) (*Context, error) {
+	return NewContextFromHash(edb, types.EmptyEngineInfo)
+}
+
+func NewContextFromHash(edb ethdb.KeyValueStore, info types.EngineInfo) (*Context, error) {
+	epoch, err := newEpochTrie(info.EpochHash, edb)
 	if err != nil {
 		return nil, err
 	}
-	epoch, err := NewTrie(info.EpochHash, tdb)
+	candidate, err := newCandidateTrie(info.CandidateHash, edb)
 	if err != nil {
 		return nil, err
 	}
-	delegate, err := NewTrie(info.DelegateHash, tdb)
+	delegate, err := newDelegateTrie(info.DelegateHash, edb)
 	if err != nil {
 		return nil, err
 	}
-	candidate, err := NewTrie(info.CandidateHash, tdb)
+	vote, err := newVoteTrie(info.VoteHash, edb)
 	if err != nil {
 		return nil, err
 	}
-	mint, err := NewTrie(info.MintCntHash, tdb)
+	mint, err := newMintTrie(info.MintCntHash, edb)
 	if err != nil {
 		return nil, err
 	}
 	return &Context{
-		voteTrie:      vote,
 		epochTrie:     epoch,
-		delegateTrie:  delegate,
 		candidateTrie: candidate,
+		delegateTrie:  delegate,
+		voteTrie:      vote,
 		mintCntTrie:   mint,
-		tdb:           tdb,
 	}, nil
 }
 
 func (c *Context) Copy() *Context {
 	return &Context{
-		voteTrie:      c.voteTrie.Copy(),
 		epochTrie:     c.epochTrie.Copy(),
-		delegateTrie:  c.delegateTrie.Copy(),
 		candidateTrie: c.candidateTrie.Copy(),
+		delegateTrie:  c.delegateTrie.Copy(),
+		voteTrie:      c.voteTrie.Copy(),
 		mintCntTrie:   c.mintCntTrie.Copy(),
-		tdb:           c.tdb,
 	}
 }
 
 func (c *Context) Root() (h common.Hash) {
 	hw := sha3.NewLegacyKeccak256()
-	_ = rlp.Encode(hw, c.voteTrie.Hash())
 	_ = rlp.Encode(hw, c.epochTrie.Hash())
-	_ = rlp.Encode(hw, c.delegateTrie.Hash())
 	_ = rlp.Encode(hw, c.candidateTrie.Hash())
+	_ = rlp.Encode(hw, c.delegateTrie.Hash())
+	_ = rlp.Encode(hw, c.voteTrie.Hash())
 	_ = rlp.Encode(hw, c.mintCntTrie.Hash())
 	hw.Sum(h[:0])
 	return h
@@ -89,10 +150,10 @@ func (c *Context) Root() (h common.Hash) {
 
 func (c *Context) Info() types.EngineInfo {
 	return types.EngineInfo{
-		VoteHash:      c.voteTrie.Hash(),
 		EpochHash:     c.epochTrie.Hash(),
-		DelegateHash:  c.delegateTrie.Hash(),
 		CandidateHash: c.candidateTrie.Hash(),
+		DelegateHash:  c.delegateTrie.Hash(),
+		VoteHash:      c.voteTrie.Hash(),
 		MintCntHash:   c.mintCntTrie.Hash(),
 	}
 }
@@ -102,29 +163,28 @@ func (c *Context) Snapshot() *Context {
 }
 
 func (c *Context) RevertToSnapShot(snapshot *Context) {
-	c.voteTrie = snapshot.voteTrie
 	c.epochTrie = snapshot.epochTrie
-	c.delegateTrie = snapshot.delegateTrie
 	c.candidateTrie = snapshot.candidateTrie
+	c.delegateTrie = snapshot.delegateTrie
+	c.voteTrie = snapshot.voteTrie
 	c.mintCntTrie = snapshot.mintCntTrie
-	c.tdb = snapshot.tdb
 }
 
 func (c *Context) RefreshFromHash(rootInfo types.EngineInfo) error {
 	var err error
-	if c.voteTrie, err = NewTrie(rootInfo.VoteHash, c.tdb); err != nil {
+	if c.epochTrie, err = newEpochTrie(rootInfo.EpochHash, c.EDB()); err != nil {
 		return err
 	}
-	if c.candidateTrie, err = NewTrie(rootInfo.CandidateHash, c.tdb); err != nil {
+	if c.candidateTrie, err = newCandidateTrie(rootInfo.CandidateHash, c.EDB()); err != nil {
 		return err
 	}
-	if c.epochTrie, err = NewTrie(rootInfo.EpochHash, c.tdb); err != nil {
+	if c.delegateTrie, err = newDelegateTrie(rootInfo.DelegateHash, c.EDB()); err != nil {
 		return err
 	}
-	if c.delegateTrie, err = NewTrie(rootInfo.DelegateHash, c.tdb); err != nil {
+	if c.voteTrie, err = newVoteTrie(rootInfo.VoteHash, c.EDB()); err != nil {
 		return err
 	}
-	if c.mintCntTrie, err = NewTrie(rootInfo.MintCntHash, c.tdb); err != nil {
+	if c.mintCntTrie, err = newMintTrie(rootInfo.MintCntHash, c.EDB()); err != nil {
 		return err
 	}
 	return nil
@@ -132,28 +192,28 @@ func (c *Context) RefreshFromHash(rootInfo types.EngineInfo) error {
 
 func (c *Context) KickOutCandidate(candidateAddr common.Address) error {
 	candidate := candidateAddr.Bytes()
-	if err := c.candidateTrie.TryDelete(candidate); err != nil {
+	if err := c.candidateTrie.t.TryDelete(candidate); err != nil {
 		if _, ok := err.(*trie.MissingNodeError); !ok {
 			return err
 		}
 	}
-	iter := trie.NewIterator(c.delegateTrie.NodeIterator(candidate))
+	iter := trie.NewIterator(c.delegateTrie.t.PrefixIterator(candidate))
 	for iter.Next() {
 		delegator := iter.Value
 		key := append(candidate, delegator...)
-		if err := c.delegateTrie.TryDelete(key); err != nil {
+		if err := c.delegateTrie.t.TryDelete(key); err != nil {
 			if _, ok := err.(*trie.MissingNodeError); !ok {
 				return err
 			}
 		}
-		v, err := c.voteTrie.TryGet(delegator)
+		v, err := c.voteTrie.t.TryGet(delegator)
 		if err != nil {
 			if _, ok := err.(*trie.MissingNodeError); !ok {
 				return err
 			}
 		}
 		if err == nil && bytes.Equal(v, candidate) {
-			err = c.voteTrie.TryDelete(delegator)
+			err = c.voteTrie.t.TryDelete(delegator)
 			if err != nil {
 				if _, ok := err.(*trie.MissingNodeError); !ok {
 					return err
@@ -166,16 +226,14 @@ func (c *Context) KickOutCandidate(candidateAddr common.Address) error {
 
 func (c *Context) BecomeCandidate(candidateAddr common.Address) error {
 	candidate := candidateAddr.Bytes()
-	return c.candidateTrie.TryUpdate(candidate, candidate)
+	return c.candidateTrie.t.TryUpdate(candidate, candidate)
 }
 
 func (c *Context) Delegate(delegatorAddr, candidateAddr common.Address) error {
-	can := common.HexToAddress("0x44d1ce0b7cb3588bca96151fe1bc05af38f91b6e")
-	newCan := common.HexToAddress("0xa60a3886b552ff9992cfcd208ec1152079e046c2")
 	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
 
 	// the candidate must be candidate
-	candidateInTrie, err := c.candidateTrie.TryGet(candidate)
+	candidateInTrie, err := c.candidateTrie.t.TryGet(candidate)
 	if err != nil {
 		return err
 	}
@@ -184,63 +242,27 @@ func (c *Context) Delegate(delegatorAddr, candidateAddr common.Address) error {
 	}
 
 	// delete old candidate if exists
-	oldCandidate, err := c.voteTrie.TryGet(delegator)
+	oldCandidate, err := c.voteTrie.t.TryGet(delegator)
 	if err != nil {
 		if _, ok := err.(*trie.MissingNodeError); !ok {
 			return err
 		}
 	}
 	if oldCandidate != nil {
-		c.delegateTrie.Delete(append(oldCandidate, delegator...))
+		c.delegateTrie.t.Delete(append(oldCandidate, delegator...))
 	}
-	it := trie.NewIterator(c.delegateTrie.NodeIterator(can.Bytes()))
-	for {
-		if it.Next() {
-			println("canIt ", "k=", common.Bytes2Hex(it.Key), ", v=", common.Bytes2Hex(it.Key))
-		} else {
-			println("canIt none")
-			break
-		}
-	}
-	it2 := trie.NewIterator(c.delegateTrie.NodeIterator(newCan.Bytes()))
-	for {
-		if it2.Next() {
-			println("newCan ", "k=", common.Bytes2Hex(it2.Key), ", v=", common.Bytes2Hex(it2.Key))
-		} else {
-			println("newCan none")
-			break
-		}
-	}
-	if err = c.delegateTrie.TryUpdate(append(candidate, delegator...), delegator); err != nil {
+	if err = c.delegateTrie.t.TryUpdate(append(candidate, delegator...), delegator); err != nil {
 		return err
 	}
-	it3 := trie.NewIterator(c.delegateTrie.NodeIterator(can.Bytes()))
-	for {
-		if it3.Next() {
-			println("canIt after ", "k=", common.Bytes2Hex(it3.Key), ", v=", common.Bytes2Hex(it3.Key))
-		} else {
-			println("canIt after none")
-			break
-		}
-	}
-	it4 := trie.NewIterator(c.delegateTrie.NodeIterator(newCan.Bytes()))
-	for {
-		if it4.Next() {
-			println("newCan after", "k", common.Bytes2Hex(it4.Key), "v", common.Bytes2Hex(it4.Key))
-		} else {
-			println("newCan after none")
-			break
-		}
-	}
 
-	return c.voteTrie.TryUpdate(delegator, candidate)
+	return c.voteTrie.t.TryUpdate(delegator, candidate)
 }
 
 func (c *Context) UnDelegate(delegatorAddr, candidateAddr common.Address) error {
 	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
 
 	// the candidate must be candidate
-	candidateInTrie, err := c.candidateTrie.TryGet(candidate)
+	candidateInTrie, err := c.candidateTrie.t.TryGet(candidate)
 	if err != nil {
 		return err
 	}
@@ -248,7 +270,7 @@ func (c *Context) UnDelegate(delegatorAddr, candidateAddr common.Address) error 
 		return errors.New("invalid candidate to undelegate")
 	}
 
-	oldCandidate, err := c.voteTrie.TryGet(delegator)
+	oldCandidate, err := c.voteTrie.t.TryGet(delegator)
 	if err != nil {
 		return err
 	}
@@ -256,56 +278,55 @@ func (c *Context) UnDelegate(delegatorAddr, candidateAddr common.Address) error 
 		return errors.New("mismatch candidate to undelegate")
 	}
 
-	if err = c.delegateTrie.TryDelete(append(candidate, delegator...)); err != nil {
+	if err = c.delegateTrie.t.TryDelete(append(candidate, delegator...)); err != nil {
 		return err
 	}
-	return c.voteTrie.TryDelete(delegator)
+	return c.voteTrie.t.TryDelete(delegator)
 }
 
-func commitTrie(t *trie.Trie, tdb *trie.Database) (common.Hash, error) {
-	rootHash, nodes, err := t.Commit(true)
+func commitTrie(t *Trie) (common.Hash, error) {
+	rootHash, nodes, err := t.t.Commit(true)
 	if err != nil {
 		return types.EmptyRootHash, err
 	}
 	if nodes != nil {
 		nodeSet := trie.NewWithNodeSet(nodes)
-		err = tdb.Update(nodeSet)
+		err = t.d.Update(nodeSet)
 		if err != nil {
-			log.Debug("engine Context update", "err", err)
+			log.Debug("engine DB update", "err", err)
 		}
-		err = tdb.Cap(0)
-		if err != nil {
-			log.Warn("engine Context Cap", "err", err)
+		if err = t.d.Cap(0); err != nil {
+			log.Warn("engine DB Cap", "err", err)
 		}
 	}
 	return rootHash, nil
 }
 
 func (c *Context) Commit() (ei types.EngineInfo, err error) {
-	if ei.EpochHash, err = commitTrie(c.epochTrie, c.TDB()); err != nil {
+	if ei.EpochHash, err = commitTrie(c.epochTrie); err != nil {
 		return
 	}
-	if ei.DelegateHash, err = commitTrie(c.delegateTrie, c.TDB()); err != nil {
+	if ei.CandidateHash, err = commitTrie(c.candidateTrie); err != nil {
 		return
 	}
-	if ei.CandidateHash, err = commitTrie(c.candidateTrie, c.TDB()); err != nil {
+	if ei.DelegateHash, err = commitTrie(c.delegateTrie); err != nil {
 		return
 	}
-	if ei.VoteHash, err = commitTrie(c.voteTrie, c.TDB()); err != nil {
+	if ei.VoteHash, err = commitTrie(c.voteTrie); err != nil {
 		return
 	}
-	if ei.MintCntHash, err = commitTrie(c.mintCntTrie, c.TDB()); err != nil {
+	if ei.MintCntHash, err = commitTrie(c.mintCntTrie); err != nil {
 		return
 	}
 	return
 }
 
-func (c *Context) TDB() *trie.Database { return c.tdb }
+func (c *Context) EDB() ethdb.KeyValueStore { return c.epochTrie.d.DiskDB() }
 
 func (c *Context) GetValidators() ([]common.Address, error) {
 	var validators []common.Address
 	key := []byte("validator")
-	validatorsRLP, err := c.epochTrie.TryGet(key)
+	validatorsRLP, err := c.epochTrie.t.TryGet(key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode validators: %s", err)
 	}
@@ -321,9 +342,9 @@ func (c *Context) SetValidators(validators []common.Address) error {
 	if err != nil {
 		return fmt.Errorf("failed to encode validators to rlp bytes: %s", err)
 	}
-	return c.epochTrie.TryUpdate(key, validatorsRLP)
+	return c.epochTrie.t.TryUpdate(key, validatorsRLP)
 }
 
-func (c *Context) CandidateTrie() *trie.Trie { return c.candidateTrie }
-func (c *Context) DelegateTrie() *trie.Trie  { return c.delegateTrie }
-func (c *Context) SetEpochTrie(t *trie.Trie) { c.epochTrie = t }
+func (c *Context) CandidateTrie() *Trie { return c.candidateTrie }
+func (c *Context) DelegateTrie() *Trie  { return c.delegateTrie }
+func (c *Context) SetEpochTrie(t *Trie) { c.epochTrie = t }

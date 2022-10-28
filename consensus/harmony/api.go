@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 )
 
 // API is a user facing RPC API to allow controlling the delegate and voting
@@ -51,7 +50,7 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 		return nil, errUnknownBlock
 	}
 
-	ctxTrie, err := NewTrie(header.EngineInfo.EpochHash, trie.NewDatabase(api.engine.db))
+	ctxTrie, err := newEpochTrie(header.EngineInfo.EpochHash, api.engine.db)
 	if err != nil {
 		return nil, err
 	}
@@ -92,12 +91,12 @@ func (api *API) GetDelegateList() (map[common.Address]common.Address, error) {
 		return nil, errUnknownBlock
 	}
 
-	ctxTrie, err := NewTrie(header.EngineInfo.DelegateHash, trie.NewDatabase(api.engine.db))
+	ctxTrie, err := newDelegateTrie(header.EngineInfo.DelegateHash, api.engine.db)
 	if err != nil {
 		return nil, err
 	}
 
-	iterDelegate := trie.NewIterator(ctxTrie.NodeIterator(nil))
+	iterDelegate := ctxTrie.Iterator(nil)
 	existDelegate := iterDelegate.Next()
 	if !existDelegate {
 		//return delegates, errors.New("no delegates")
@@ -126,12 +125,12 @@ func (api *API) GetVoteList(number *rpc.BlockNumber) (map[common.Address]common.
 		return nil, errUnknownBlock
 	}
 
-	voteTrie, err := NewTrie(header.EngineInfo.VoteHash, trie.NewDatabase(api.engine.db))
+	voteTrie, err := newVoteTrie(header.EngineInfo.VoteHash, api.engine.db)
 	if err != nil {
 		return nil, err
 	}
 
-	iterCandidate := trie.NewIterator(voteTrie.NodeIterator(nil))
+	iterCandidate := voteTrie.Iterator(nil)
 	existCandidate := iterCandidate.Next()
 	if !existCandidate {
 		//return votes, errors.New("no candidates")
@@ -159,7 +158,7 @@ func (api *API) GetMintCnt(epochID int) (map[common.Address]uint64, error) {
 		return nil, errUnknownBlock
 	}
 
-	mintTrie, err := NewTrie(header.EngineInfo.MintCntHash, trie.NewDatabase(api.engine.db))
+	mintTrie, err := newMintTrie(header.EngineInfo.MintCntHash, api.engine.db)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +166,7 @@ func (api *API) GetMintCnt(epochID int) (map[common.Address]uint64, error) {
 	key := make([]byte, 8)
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 
-	iterMint := trie.NewIterator(mintTrie.NodeIterator(key))
+	iterMint := mintTrie.Iterator(key)
 	existMint := iterMint.Next()
 	if !existMint {
 		//return nil, errors.New("no candidates")
@@ -208,7 +207,7 @@ func (api *API) GetValidatorMintCnt(epochID int, addr string) (uint64, error) {
 		return 0, errUnknownBlock
 	}
 
-	mintTrie, err := NewTrie(header.EngineInfo.MintCntHash, trie.NewDatabase(api.engine.db))
+	mintTrie, err := newMintTrie(header.EngineInfo.MintCntHash, api.engine.db)
 	if err != nil {
 		return 0, err
 	}
@@ -217,7 +216,7 @@ func (api *API) GetValidatorMintCnt(epochID int, addr string) (uint64, error) {
 	binary.BigEndian.PutUint64(key, uint64(epochID))
 	validator := common.HexToAddress(addr)
 
-	cntBytes, err := mintTrie.TryGet(append(key, validator.Bytes()...))
+	cntBytes, err := mintTrie.t.TryGet(append(key, validator.Bytes()...))
 	if cntBytes != nil {
 		count = binary.BigEndian.Uint64(cntBytes)
 	}
@@ -235,12 +234,12 @@ func (api *API) GetCandidates() ([]common.Address, error) {
 		return nil, errUnknownBlock
 	}
 
-	candidateTrie, err := NewTrie(header.EngineInfo.CandidateHash, trie.NewDatabase(api.engine.db))
+	candidateTrie, err := newCandidateTrie(header.EngineInfo.CandidateHash, api.engine.db)
 	if err != nil {
 		return nil, err
 	}
 
-	iterCandidates := trie.NewIterator(candidateTrie.NodeIterator(nil))
+	iterCandidates := candidateTrie.Iterator(nil)
 	existCandidate := iterCandidates.Next()
 	if !existCandidate {
 		//return nil, errors.New("no candidates")

@@ -67,19 +67,19 @@ func (n *BlockNonce) UnmarshalText(input []byte) error {
 //go:generate go run ../../rlp/rlpgen -type Header -out gen_header_rlp.go
 
 type EngineInfo struct {
-	VoteHash      common.Hash
 	EpochHash     common.Hash
-	DelegateHash  common.Hash
 	CandidateHash common.Hash
+	DelegateHash  common.Hash
+	VoteHash      common.Hash
 	MintCntHash   common.Hash
 }
 
 func (ei *EngineInfo) String() string {
-	return fmt.Sprintf("{vote: %s, epoch: %s, delegate: %s, candidate: %s, mintCnt: %s}",
-		ei.VoteHash.String(),
+	return fmt.Sprintf("{epoch: %s, candidate: %s, delegate: %s, vote: %s, mintCnt: %s}",
 		ei.EpochHash.String(),
-		ei.DelegateHash.String(),
 		ei.CandidateHash.String(),
+		ei.DelegateHash.String(),
+		ei.VoteHash.String(),
 		ei.MintCntHash.String(),
 	)
 }

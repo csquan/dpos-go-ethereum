@@ -18,11 +18,11 @@ import (
 
 var prefixCandidate = []byte("candidate-")
 
-func newDB(name string) ethdb.Database {
+func newDB(dir, name string) ethdb.Database {
 	config := &node.Config{
 		Name:    "geth",
 		Version: params.Version,
-		DataDir: name,
+		DataDir: dir,
 		P2P: p2p.Config{
 			ListenAddr:  "0.0.0.0:0",
 			NoDiscovery: true,
@@ -32,7 +32,7 @@ func newDB(name string) ethdb.Database {
 	}
 	// Create the node and configure a full Ethereum node on it
 	stack, _ := node.New(config)
-	engineDB, err := stack.OpenDatabaseWithFreezer("verify", 0, 0, "", "eth/db/chaindata/", false)
+	engineDB, err := stack.OpenDatabaseWithFreezer(name, 0, 0, "", "eth/db/chaindata/", false)
 	if err != nil {
 		log.Error("new engine db error", "err", err)
 		return nil
@@ -41,13 +41,15 @@ func newDB(name string) ethdb.Database {
 }
 
 func verifyHarmony(db ethdb.Database) error {
-	tdb := trie.NewDatabase(db)
-	epochHash := common.HexToHash("0x76596dd2d82a0176f024e40c027df92fd694b7d19a712b8c236e4d3d064f5428")
-	candidateHash := common.HexToHash("")
-	engineInfo := types.EngineInfo{
-		common.Hash{}, epochHash, common.Hash{}, candidateHash, common.Hash{},
+	ei := types.EngineInfo{
+		EpochHash:     common.HexToHash("0x0a5dfeb3b52a22662b011d6acca0ac65068bde243c3c4215d70ffe4cf2fca999"),
+		CandidateHash: common.HexToHash("0x55f025f34d36c18d36964a1e21d3a8ab548bcb24add93319226d65c0ec15a48d"),
+		DelegateHash:  common.HexToHash("0xb42c68a9105f934c7d9aba7096498091bef37c9105d3ddfea64fb7a9e9665c68"),
+		VoteHash:      common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
+		MintCntHash:   common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
 	}
-	ctx, err := harmony.NewContextFromHash(tdb, engineInfo)
+
+	ctx, err := harmony.NewContextFromHash(db, ei)
 	if err != nil {
 		log.Error("new epochTrie", "err", err)
 		return err
@@ -61,7 +63,7 @@ func verifyHarmony(db ethdb.Database) error {
 		log.Error("validators length", "err", err)
 		return err
 	}
-	iterCandidate := trie.NewIterator(ctx.CandidateTrie().NodeIterator(nil))
+	iterCandidate := ctx.CandidateTrie().Iterator(nil)
 	existCandidate := iterCandidate.Next()
 	if !existCandidate {
 		log.Error("no candidates")
@@ -70,7 +72,7 @@ func verifyHarmony(db ethdb.Database) error {
 }
 
 func verifyBlock(db ethdb.Database) error {
-	block0Hash := common.HexToHash("0x724f1516053543ba1772c3f88c7ce042d511f1a113c0ae03c3f9dbd965d6d484")
+	block0Hash := common.HexToHash("0x41ed7f8e879f41dfac8e8bf924ae3eb2cdedf1d6d4de9746f04e7316d64c1bc9")
 	block := rawdb.ReadBlock(db, block0Hash, 0)
 
 	if block == nil {
@@ -97,12 +99,12 @@ func verifyBlock(db ethdb.Database) error {
 	return nil
 }
 
-func main1() {
-	db := newDB("lightchaindata")
-	if err := verifyBlock(db); err != nil {
+func main() {
+	db := newDB("feng", "lightchaindata")
+	if err := verifyHarmony(db); err != nil {
 		return
 	}
-	if err := verifyHarmony(db); err != nil {
+	if err := verifyBlock(db); err != nil {
 		return
 	}
 }
@@ -139,11 +141,11 @@ func insert(db ethdb.Database, prefix bool) error {
 }
 
 func mainGen() {
-	dbPlain := newDB("plain")
+	dbPlain := newDB("plain", "verify")
 	if err := insert(dbPlain, false); err != nil {
 		log.Error("-------------")
 	}
-	dbPrefix := newDB("prefix")
+	dbPrefix := newDB("prefix", "verify")
 	if err := insert(dbPrefix, true); err != nil {
 		log.Error("+++++++++++++")
 	}
@@ -158,7 +160,7 @@ func count(db ethdb.Database, hash string, prefix bool) error {
 	}
 	var it *trie.Iterator
 	if prefix {
-		it = trie.NewIterator(ti.PrefixIterator(nil, prefixCandidate))
+		it = trie.NewIterator(ti.PrefixIterator(prefixCandidate))
 	} else {
 		it = trie.NewIterator(ti.NodeIterator(nil))
 	}
@@ -180,14 +182,14 @@ func count(db ethdb.Database, hash string, prefix bool) error {
 }
 
 func mainCount() {
-	dbPlain := newDB("plain")
+	dbPlain := newDB("plain", "verify")
 	t0 := time.Now()
 	if err := count(dbPlain, "0x717b6c364a771fb173f7b66b1e5fa7db7891a7ac8a276e6715eb4f4f9e2683bf", false); err != nil {
 		log.Error("count", "err", err)
 	}
 	span0 := time.Now().Sub(t0).Microseconds()
 	dbPlain.Close()
-	dbPrefix := newDB("prefix")
+	dbPrefix := newDB("prefix", "verify")
 	t1 := time.Now()
 	if err := count(dbPrefix, "0xffd58cc86a961f9db0bd9e5f941daa2cbdaad29c35ad2389887e3e08462c5aee", true); err != nil {
 		log.Error("count2", "err", err)
@@ -197,7 +199,7 @@ func mainCount() {
 	log.Warn("time cost", "plain", span0, "prefix", span1)
 }
 
-func main() {
+func mainPrefixVerify() {
 	mainGen()
 	mainCount()
 }

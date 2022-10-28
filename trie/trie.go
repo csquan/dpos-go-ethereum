@@ -129,10 +129,7 @@ func (t *Trie) NodeIterator(start []byte) NodeIterator {
 
 // PrefixIterator returns an iterator that returns nodes of the trie which has the prefix path specificed
 // Iteration starts at the key after the given start key.
-func (t *Trie) PrefixIterator(start, prefix []byte) NodeIterator {
-	if start != nil {
-		prefix = append(prefix, start...)
-	}
+func (t *Trie) PrefixIterator(prefix []byte) NodeIterator {
 	return newPrefixIterator(t, prefix)
 }
 

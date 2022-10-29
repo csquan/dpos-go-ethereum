@@ -41,6 +41,13 @@ func newDB(dir, name string) ethdb.Database {
 }
 
 func verifyHarmony(db ethdb.Database) error {
+	//ei := types.EngineInfo{
+	//	EpochHash:     common.HexToHash("0x0a5dfeb3b52a22662b011d6acca0ac65068bde243c3c4215d70ffe4cf2fca999"),
+	//	CandidateHash: common.HexToHash("0x55f025f34d36c18d36964a1e21d3a8ab548bcb24add93319226d65c0ec15a48d"),
+	//	DelegateHash:  common.HexToHash("0xb42c68a9105f934c7d9aba7096498091bef37c9105d3ddfea64fb7a9e9665c68"),
+	//	VoteHash:      common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
+	//	MintCntHash:   common.HexToHash("0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"),
+	//}
 	ei := types.EngineInfo{
 		EpochHash:     common.HexToHash("0x0a5dfeb3b52a22662b011d6acca0ac65068bde243c3c4215d70ffe4cf2fca999"),
 		CandidateHash: common.HexToHash("0x55f025f34d36c18d36964a1e21d3a8ab548bcb24add93319226d65c0ec15a48d"),
@@ -73,7 +80,14 @@ func verifyHarmony(db ethdb.Database) error {
 
 func verifyBlock(db ethdb.Database) error {
 	block0Hash := common.HexToHash("0x41ed7f8e879f41dfac8e8bf924ae3eb2cdedf1d6d4de9746f04e7316d64c1bc9")
-	block := rawdb.ReadBlock(db, block0Hash, 0)
+	blockHash := common.HexToHash("0x8c1bd5c32637f1e94660a266a7cc6972a93812c752d408f6dfe405c172616822")
+	blockNumber := rawdb.ReadHeaderNumber(db, blockHash)
+	if blockNumber == nil {
+		msg := "block number of hash is nil"
+		log.Error(msg)
+		return errors.New(msg)
+	}
+	block := rawdb.ReadBlock(db, blockHash, *blockNumber)
 
 	if block == nil {
 		blockTrie, err := trie.New(common.Hash{}, block0Hash, trie.NewDatabase(db))

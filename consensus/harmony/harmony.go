@@ -260,12 +260,12 @@ func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, 
 	} else {
 		prevHeader = chain.GetHeader(header.ParentHash, number-1)
 	}
-	ctx, err := NewContextFromHash(h.ctx.EDB(), prevHeader.EngineInfo)
+	prevCtx, err := NewContextFromHash(h.ctx.EDB(), prevHeader.EngineInfo)
 	if err != nil {
 		return err
 	}
-	epochContext := &EpochContext{Context: ctx}
-	validator, err := epochContext.lookupValidator(header.Time)
+	prevEpoch := &EpochContext{Context: prevCtx}
+	validator, err := prevEpoch.lookupValidator(header.Time)
 	if err != nil {
 		return err
 	}
@@ -438,12 +438,12 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 	if err := checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	ctx, err := NewContextFromHash(h.ctx.EDB(), lastBlock.Header().EngineInfo)
+	lastCtx, err := NewContextFromHash(h.ctx.EDB(), lastBlock.Header().EngineInfo)
 	if err != nil {
 		return err
 	}
-	epochContext := &EpochContext{Context: ctx}
-	validator, err := epochContext.lookupValidator(now)
+	lastEpochContext := &EpochContext{Context: lastCtx}
+	validator, err := lastEpochContext.lookupValidator(now)
 	if err != nil {
 		return err
 	}

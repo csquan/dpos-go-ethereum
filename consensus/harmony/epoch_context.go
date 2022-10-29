@@ -26,7 +26,6 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	votes = map[common.Address]*big.Int{}
 	delegateTrie := ec.Context.delegateTrie
 	candidateTrie := ec.Context.candidateTrie
-	stateDB := ec.stateDB
 
 	iterCandidate := candidateTrie.Iterator(nil)
 	existCandidate := iterCandidate.Next()
@@ -50,7 +49,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 				score = new(big.Int)
 			}
 			delegatorAddr := common.BytesToAddress(delegator)
-			weight := stateDB.GetBalance(delegatorAddr)
+			weight := ec.stateDB.GetBalance(delegatorAddr)
 			score.Add(score, weight)
 			votes[candidateAddr] = score
 			existDelegator = delegateIterator.Next()
@@ -159,24 +158,20 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		prevEpoch = currentEpoch - 1
 	}
 
+	if err := ec.Context.RefreshFromHash(parent.EngineInfo); err != nil {
+		return err
+	}
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, prevEpoch)
-	var ecTemp *EpochContext
-
-	if ctx, err := NewContextFromHash(ec.Context.EDB(), parent.EngineInfo); err != nil {
-		return err
-	} else {
-		ecTemp = &EpochContext{Context: ctx, stateDB: ec.stateDB}
-	}
-	iter := ecTemp.Context.mintCntTrie.Iterator(prevEpochBytes)
+	iter := ec.Context.mintCntTrie.Iterator(prevEpochBytes)
 	for i := prevEpoch; i < currentEpoch; i++ {
 		// if prevEpoch is not genesis, kick-out not active candidate
 		if !prevEpochIsGenesis && iter.Next() {
-			if err := ecTemp.kickOutValidator(prevEpoch); err != nil {
+			if err := ec.kickOutValidator(prevEpoch); err != nil {
 				return err
 			}
 		}
-		votes, err := ecTemp.countVotes()
+		votes, err := ec.countVotes()
 		if err != nil {
 			return err
 		}

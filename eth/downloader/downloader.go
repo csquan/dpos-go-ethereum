@@ -741,9 +741,11 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 // calculateRequestSpan calculates what headers to request from a peer when trying to determine the
 // common ancestor.
 // It returns parameters to be used for peer.RequestHeadersByNumber:
-//  from - starting block number
-//  count - number of headers to request
-//  skip - number of headers to skip
+//
+//	from - starting block number
+//	count - number of headers to request
+//	skip - number of headers to skip
+//
 // and also returns 'max', the last block which is expected to be returned by the remote peers,
 // given the (from,count,skip)
 func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, uint64) {
@@ -1411,7 +1413,7 @@ func (d *Downloader) processHeaders(origin uint64, td, ttd *big.Int, beaconMode 
 							if (mode == SnapSync || frequency > 1) && n > 0 && rollback == 0 {
 								rollback = chunkHeaders[0].Number.Uint64()
 							}
-							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n], "parent", chunkHeaders[n].ParentHash, "err", err)
+							log.Warn("Invalid header encountered", "number", chunkHeaders[n].Number, "hash", chunkHashes[n].String(), "parent", chunkHeaders[n].ParentHash.String(), "err", err)
 							return fmt.Errorf("%w: %v", errInvalidChain, err)
 						}
 						// All verifications passed, track all headers within the allowed limits

@@ -386,7 +386,7 @@ func (hc *HeaderChain) InsertHeaderChain(chain []*types.Header, start time.Time,
 		"elapsed", common.PrettyDuration(time.Since(start)),
 	}
 	if last := res.lastHeader; last != nil {
-		context = append(context, "number", last.Number, "hash", res.lastHash)
+		context = append(context, "number", last.Number, "hash", res.lastHash.String())
 		if timestamp := time.Unix(int64(last.Time), 0); time.Since(timestamp) > time.Minute {
 			context = append(context, []interface{}{"age", common.PrettyAge(timestamp)}...)
 		}

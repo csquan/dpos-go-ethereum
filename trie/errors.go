@@ -17,6 +17,7 @@
 package trie
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,6 +42,9 @@ func (err *MissingNodeError) Unwrap() error {
 func (err *MissingNodeError) Error() string {
 	if err.Owner == (common.Hash{}) {
 		return fmt.Sprintf("missing trie node %x (path %x) %v", err.NodeHash, err.Path, err.err)
+	} else if bytes.Equal(err.Owner[:8], []byte{0, 0, 0, 0, 0, 0, 0, 0}) { // 😄
+		return fmt.Sprintf("missing trie node 0x%x (owner %s)", err.NodeHash, err.Owner[:])
+	} else {
+		return fmt.Sprintf("missing trie node %x (owner %x) (path %x) %v", err.NodeHash, err.Owner, err.Path, err.err)
 	}
-	return fmt.Sprintf("missing trie node %x (owner %x) (path %x) %v", err.NodeHash, err.Owner, err.Path, err.err)
 }

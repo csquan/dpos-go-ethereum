@@ -422,13 +422,14 @@ func (h *Harmony) Finalize(
 }
 
 func checkDeadline(lastBlock *types.Block, now uint64) error {
-	prevSlot := PrevSlot(now)
-	nextSlot := NextSlot(now)
-	if lastBlock.Time() >= nextSlot {
+	prevSlotTime := prevSlot(now)
+	nextSlotTime := nextSlot(now)
+	log.Debug("checkDeadLine", "lastBlock", lastBlock.Time(), "now", now, "prev", prevSlotTime, "next", nextSlotTime)
+	if lastBlock.Time() >= nextSlotTime {
 		return ErrMintFutureBlock
 	}
 	// last block was arrived, or time's up
-	if lastBlock.Time() == prevSlot || nextSlot-now <= 1 {
+	if lastBlock.Time() == prevSlotTime || nextSlotTime-now <= 1 {
 		return nil
 	}
 	return ErrWaitForPrevBlock
@@ -463,16 +464,16 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 		return errUnknownBlock
 	}
 	now := uint64(time.Now().Unix())
-	delay := NextSlot(now) - now
+	delay := nextSlot(now) - now
 
 	block.Header().Time = uint64(time.Now().Unix())
 	// time's up, sign the block
-	sigHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(header).Bytes())
+	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(header).Bytes())
 	if err != nil {
 		log.Error("signFn error", "err", err)
 		return nil
 	}
-	copy(header.Extra[len(header.Extra)-extraSeal:], sigHash)
+	copy(header.Extra[len(header.Extra)-extraSeal:], sealHash)
 
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
@@ -486,7 +487,7 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 		select {
 		case results <- block.WithSeal(header):
 		default:
-			log.Warn("Sealing result is not read by miner", "sealhash", sigHash)
+			log.Warn("Sealing result is not read by miner", "sealHash", sealHash)
 		}
 	}()
 
@@ -536,11 +537,11 @@ func ecRecover(header *types.Header, sigCache *lru.ARCCache) (common.Address, er
 	return signer, nil
 }
 
-func PrevSlot(now uint64) uint64 {
+func prevSlot(now uint64) uint64 {
 	return (now - 1) / blockInterval * blockInterval
 }
 
-func NextSlot(now uint64) uint64 {
+func nextSlot(now uint64) uint64 {
 	return (now + blockInterval - 1) / blockInterval * blockInterval
 }
 

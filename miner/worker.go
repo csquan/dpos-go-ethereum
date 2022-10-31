@@ -399,7 +399,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		timestamp int64 // timestamp for each round of sealing.
 	)
 
-	ticker := time.NewTicker(time.Second).C
+	ticker := time.NewTicker(time.Second)
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
@@ -412,6 +412,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case <-w.exitCh:
 			return
 		}
+		ticker.Reset(recommit)
 		atomic.StoreInt32(&w.newTxs, 0)
 	}
 	// clearPending cleans the stale pending tasks.
@@ -437,7 +438,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
 
-		case <-ticker:
+		case <-ticker.C:
 			// If sealing is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.chainConfig.Harmony != nil || w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {

@@ -421,7 +421,7 @@ func (h *Harmony) Finalize(
 		"root", header.Root.String())
 }
 
-func checkDeadline(lastBlock *types.Block, now uint64) error {
+func (h *Harmony) checkDeadline(lastBlock *types.Block, now uint64) error {
 	prevSlotTime := prevSlot(now)
 	nextSlotTime := nextSlot(now)
 	log.Debug("checkDeadLine", "lastBlock", lastBlock.Time(), "now", now, "prev", prevSlotTime, "next", nextSlotTime)
@@ -436,7 +436,7 @@ func checkDeadline(lastBlock *types.Block, now uint64) error {
 }
 
 func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
-	if err := checkDeadline(lastBlock, now); err != nil {
+	if err := h.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
 	lastCtx, err := NewContextFromHash(h.ctx.EDB(), lastBlock.Header().EngineInfo)
@@ -457,8 +457,7 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 // Seal generates a new block for the given input block with the local miner's
 // seal place on top.
 func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	header := block.Header()
-	number := header.Number.Uint64()
+	number := block.Header().Number.Uint64()
 	// Sealing the genesis block is not supported
 	if number == 0 {
 		return errUnknownBlock
@@ -468,12 +467,12 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 
 	block.Header().Time = uint64(time.Now().Unix())
 	// time's up, sign the block
-	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(header).Bytes())
+	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(block.Header()).Bytes())
 	if err != nil {
 		log.Error("signFn error", "err", err)
 		return nil
 	}
-	copy(header.Extra[len(header.Extra)-extraSeal:], sealHash)
+	copy(block.Header().Extra[len(block.Header().Extra)-extraSeal:], sealHash)
 
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
@@ -485,7 +484,7 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 		}
 
 		select {
-		case results <- block.WithSeal(header):
+		case results <- block.WithSeal(block.Header()):
 		default:
 			log.Warn("Sealing result is not read by miner", "sealHash", sealHash)
 		}

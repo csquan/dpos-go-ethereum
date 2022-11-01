@@ -396,7 +396,6 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 	defer w.wg.Done()
 	var (
 		interrupt *int32
-		timestamp int64 // timestamp for each round of sealing.
 	)
 
 	ticker := time.NewTicker(time.Second)
@@ -408,7 +407,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		}
 		interrupt = new(int32)
 		select {
-		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: timestamp}:
+		case w.newWorkCh <- &newWorkReq{interrupt: interrupt, noempty: noempty, timestamp: time.Now().Unix()}:
 		case <-w.exitCh:
 			return
 		}
@@ -430,26 +429,21 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		select {
 		case <-w.startCh:
 			clearPending(w.chain.CurrentBlock().NumberU64())
-			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
-
 		case head := <-w.chainHeadCh:
 			clearPending(head.Block.NumberU64())
-			timestamp = time.Now().Unix()
 			commit(false, commitInterruptNewHead)
-
 		case <-ticker.C:
 			// If sealing is running resubmit a new work cycle periodically to pull in
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.chainConfig.Harmony != nil || w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
 				// Short circuit if no new transaction arrives.
-				//if atomic.LoadInt32(&w.newTxs) == 0 {
+				//if atomic.LoadInt32(&w.newTxs) == 0 {  // FIXME maybe open this comment
 				//	timer.Reset(recommit)
 				//	continue
 				//}
 				commit(true, commitInterruptResubmit)
 			}
-
 		case <-w.exitCh:
 			return
 		}
@@ -679,7 +673,8 @@ func (w *worker) resultLoop() {
 				continue
 			}
 			log.Info("Successfully sealed new block", "number", block.Number(),
-				"sealHash", sealhash.String(), "hash", hash.String(), "engineInfo", block.Header().EngineInfo.String(),
+				"sealHash", sealhash.String(), "hash", hash.String(), "time", block.Time(),
+				"engineInfo", block.Header().EngineInfo.String(),
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
 			// Broadcast the block and announce chain insertion event
@@ -1041,6 +1036,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	work, err := w.prepareWork(&generateParams{
 		timestamp: uint64(timestamp),
 		coinbase:  coinbase,
+		forceTime: true,
 	})
 	if err != nil {
 		return
@@ -1072,12 +1068,18 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 // Note the assumption is held that the mutation is allowed to the passed env, do
 // the deep copy first.
 func (w *worker) commit(env *environment, interval func(), update bool, start time.Time) error {
-	run := func(block *types.Block) {
+	run := func() error {
+		env := env.copy()
+		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
+		if err != nil {
+			log.Error("FinalizeAndAssemble error", "err", err)
+			return err
+		}
 		select {
 		case w.taskCh <- &task{receipts: env.receipts, state: env.state, block: block, createdAt: time.Now()}:
 			w.unconfirmed.Shift(block.NumberU64() - 1)
 			log.Info("Commit new sealing work", "number", block.Number(),
-				"sealhash", w.engine.SealHash(block.Header()).String(),
+				"sealHash", w.engine.SealHash(block.Header()).String(),
 				"uncles", len(env.uncles), "txs", env.tcount,
 				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))
@@ -1086,6 +1088,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		case <-w.exitCh:
 			log.Info("Worker has exited")
 		}
+		return nil
 	}
 	if w.isRunning() {
 		if interval != nil {
@@ -1093,12 +1096,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		}
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
-		env := env.copy()
-		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
-		if err != nil {
-			log.Error("FinalizeAndAssemble error", "err", err)
-			return err
-		}
+
 		if engine, ok := w.engine.(*harmony.Harmony); ok {
 			if err := engine.CheckValidator(w.chain.CurrentBlock(), uint64(time.Now().Unix())); err != nil {
 				switch err {
@@ -1110,11 +1108,10 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 				default:
 					log.Error("Failed to mint the block", "err", err)
 				}
+				return err
 			} else {
-				run(block)
+				return run()
 			}
-		} else if !w.isTTDReached(block.Header()) {
-			run(block)
 		}
 	}
 	if update {

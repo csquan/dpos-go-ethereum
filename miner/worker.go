@@ -175,12 +175,6 @@ type getWorkReq struct {
 	err    chan error
 }
 
-// intervalAdjust represents a resubmitting interval adjustment.
-type intervalAdjust struct {
-	ratio float64
-	inc   bool
-}
-
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
@@ -199,18 +193,14 @@ type worker struct {
 	txsSub       event.Subscription
 	chainHeadCh  chan core.ChainHeadEvent
 	chainHeadSub event.Subscription
-	chainSideCh  chan core.ChainSideEvent
-	chainSideSub event.Subscription
 
 	// Channels
-	newWorkCh          chan *newWorkReq
-	getWorkCh          chan *getWorkReq
-	taskCh             chan *task
-	resultCh           chan *types.Block
-	startCh            chan struct{}
-	exitCh             chan struct{}
-	resubmitIntervalCh chan time.Duration
-	resubmitAdjustCh   chan *intervalAdjust
+	newWorkCh chan *newWorkReq
+	getWorkCh chan *getWorkReq
+	taskCh    chan *task
+	resultCh  chan *types.Block
+	startCh   chan struct{}
+	exitCh    chan struct{}
 
 	wg sync.WaitGroup
 
@@ -253,34 +243,30 @@ type worker struct {
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool) *worker {
 	worker := &worker{
-		config:             config,
-		chainConfig:        chainConfig,
-		engine:             engine,
-		eth:                eth,
-		mux:                mux,
-		chain:              eth.BlockChain(),
-		isLocalBlock:       isLocalBlock,
-		localUncles:        make(map[common.Hash]*types.Block),
-		remoteUncles:       make(map[common.Hash]*types.Block),
-		unconfirmed:        newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
-		pendingTasks:       make(map[common.Hash]*task),
-		txsCh:              make(chan core.NewTxsEvent, txChanSize),
-		chainHeadCh:        make(chan core.ChainHeadEvent, chainHeadChanSize),
-		chainSideCh:        make(chan core.ChainSideEvent, chainSideChanSize),
-		newWorkCh:          make(chan *newWorkReq),
-		getWorkCh:          make(chan *getWorkReq),
-		taskCh:             make(chan *task),
-		resultCh:           make(chan *types.Block, resultQueueSize),
-		exitCh:             make(chan struct{}),
-		startCh:            make(chan struct{}, 1),
-		resubmitIntervalCh: make(chan time.Duration),
-		resubmitAdjustCh:   make(chan *intervalAdjust, resubmitAdjustChanSize),
+		config:       config,
+		chainConfig:  chainConfig,
+		engine:       engine,
+		eth:          eth,
+		mux:          mux,
+		chain:        eth.BlockChain(),
+		isLocalBlock: isLocalBlock,
+		localUncles:  make(map[common.Hash]*types.Block),
+		remoteUncles: make(map[common.Hash]*types.Block),
+		unconfirmed:  newUnconfirmedBlocks(eth.BlockChain(), sealingLogAtDepth),
+		pendingTasks: make(map[common.Hash]*task),
+		txsCh:        make(chan core.NewTxsEvent, txChanSize),
+		chainHeadCh:  make(chan core.ChainHeadEvent, chainHeadChanSize),
+		newWorkCh:    make(chan *newWorkReq),
+		getWorkCh:    make(chan *getWorkReq),
+		taskCh:       make(chan *task),
+		resultCh:     make(chan *types.Block, resultQueueSize),
+		exitCh:       make(chan struct{}),
+		startCh:      make(chan struct{}, 1),
 	}
 	// Subscribe NewTxsEvent for tx pool
 	worker.txsSub = eth.TxPool().SubscribeNewTxsEvent(worker.txsCh)
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
-	worker.chainSideSub = eth.BlockChain().SubscribeChainSideEvent(worker.chainSideCh)
 
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
@@ -320,14 +306,6 @@ func (w *worker) setExtra(extra []byte) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.extra = extra
-}
-
-// setRecommitInterval updates the interval for miner sealing work recommitting.
-func (w *worker) setRecommitInterval(interval time.Duration) {
-	select {
-	case w.resubmitIntervalCh <- interval:
-	case <-w.exitCh:
-	}
 }
 
 // disablePreseal disables pre-sealing feature
@@ -457,7 +435,6 @@ func (w *worker) mainLoop() {
 	defer w.wg.Done()
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
-	defer w.chainSideSub.Unsubscribe()
 	defer func() {
 		if w.current != nil {
 			w.current.discard()
@@ -480,29 +457,6 @@ func (w *worker) mainLoop() {
 			} else {
 				req.err <- nil
 				req.result <- block
-			}
-		case ev := <-w.chainSideCh:
-			// Short circuit for duplicate side blocks
-			if _, exist := w.localUncles[ev.Block.Hash()]; exist {
-				continue
-			}
-			if _, exist := w.remoteUncles[ev.Block.Hash()]; exist {
-				continue
-			}
-			// Add side block to possible uncle block set depending on the author.
-			if w.isLocalBlock != nil && w.isLocalBlock(ev.Block.Header()) {
-				w.localUncles[ev.Block.Hash()] = ev.Block
-			} else {
-				w.remoteUncles[ev.Block.Hash()] = ev.Block
-			}
-			// If our sealing block contains less than 2 uncle blocks,
-			// add the new uncle block if valid and regenerate a new
-			// sealing block for higher profit.
-			if w.isRunning() && w.current != nil && len(w.current.uncles) < 2 {
-				start := time.Now()
-				if err := w.commitUncle(w.current, ev.Block.Header()); err == nil {
-					w.commit(w.current.copy(), nil, true, start)
-				}
 			}
 
 		case <-cleanTicker.C:
@@ -559,8 +513,6 @@ func (w *worker) mainLoop() {
 		case <-w.txsSub.Err():
 			return
 		case <-w.chainHeadSub.Err():
-			return
-		case <-w.chainSideSub.Err():
 			return
 		}
 	}
@@ -722,28 +674,6 @@ func (w *worker) makeEnv(parent *types.Block, header *types.Header, coinbase com
 	return env, nil
 }
 
-// commitUncle adds the given block to uncle block set, returns error if failed to add.
-func (w *worker) commitUncle(env *environment, uncle *types.Header) error {
-	if w.isTTDReached(env.header) {
-		return errors.New("ignore uncle for beacon block")
-	}
-	hash := uncle.Hash()
-	if _, exist := env.uncles[hash]; exist {
-		return errors.New("uncle not unique")
-	}
-	if env.header.ParentHash == uncle.ParentHash {
-		return errors.New("uncle is sibling")
-	}
-	if !env.ancestors.Contains(uncle.ParentHash) {
-		return errors.New("uncle's parent unknown")
-	}
-	if env.family.Contains(hash) {
-		return errors.New("uncle already included")
-	}
-	env.uncles[hash] = uncle
-	return nil
-}
-
 // updateSnapshot updates pending snapshot block, receipts and state.
 func (w *worker) updateSnapshot(env *environment) {
 	w.snapshotMu.Lock()
@@ -763,10 +693,12 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
-	var engineSnap *harmony.Context // because of harmony commit to another database
-	ha, _ := w.engine.(*harmony.Harmony)
-	if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnDelegateTxType {
-		engineSnap = ha.Ctx().Snapshot()
+	var engineSnap *harmony.Context = nil
+	ha, ok := w.engine.(*harmony.Harmony)
+	if ok {
+		if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnDelegateTxType {
+			engineSnap = ha.Ctx().Snapshot()
+		}
 	}
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
@@ -802,10 +734,6 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 				ratio := float64(gasLimit-env.gasPool.Gas()) / float64(gasLimit)
 				if ratio < 0.1 {
 					ratio = 0.1
-				}
-				w.resubmitAdjustCh <- &intervalAdjust{
-					ratio: ratio,
-					inc:   true,
 				}
 				return errBlockInterruptedByRecommit
 			}
@@ -880,11 +808,6 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		}
 		w.pendingLogsFeed.Send(cpy)
 	}
-	// Notify resubmit loop to decrease resubmitting interval if current interval is larger
-	// than the user-specified one.
-	if interrupt != nil {
-		w.resubmitAdjustCh <- &intervalAdjust{inc: false}
-	}
 	return nil
 }
 
@@ -954,24 +877,6 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	if err != nil {
 		log.Error("Failed to create sealing context", "err", err)
 		return nil, err
-	}
-	// Accumulate the uncles for the sealing work only if it's allowed.
-	if !genParams.noUncle {
-		commitUncles := func(blocks map[common.Hash]*types.Block) {
-			for hash, uncle := range blocks {
-				if len(env.uncles) == 2 {
-					break
-				}
-				if err := w.commitUncle(env, uncle.Header()); err != nil {
-					log.Trace("Possible uncle rejected", "hash", hash, "reason", err)
-				} else {
-					log.Debug("Committing new uncle to block", "hash", hash)
-				}
-			}
-		}
-		// Prefer to locally generated uncle
-		commitUncles(w.localUncles)
-		commitUncles(w.remoteUncles)
 	}
 	return env, nil
 }
@@ -1150,13 +1055,6 @@ func (w *worker) getSealingBlock(parent common.Hash, timestamp uint64, coinbase 
 	}
 }
 
-// isTTDReached returns the indicator if the given block has reached the total
-// terminal difficulty for The Merge transition.
-func (w *worker) isTTDReached(header *types.Header) bool {
-	td, ttd := w.chain.GetTd(header.ParentHash, header.Number.Uint64()-1), w.chain.Config().TerminalTotalDifficulty
-	return td != nil && ttd != nil && td.Cmp(ttd) >= 0
-}
-
 // copyReceipts makes a deep copy of the given receipts.
 func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 	result := make([]*types.Receipt, len(receipts))
@@ -1165,14 +1063,6 @@ func copyReceipts(receipts []*types.Receipt) []*types.Receipt {
 		result[i] = &cpy
 	}
 	return result
-}
-
-// postSideBlock fires a side chain event, only use it for testing.
-func (w *worker) postSideBlock(event core.ChainSideEvent) {
-	select {
-	case w.chainSideCh <- event:
-	case <-w.exitCh:
-	}
 }
 
 // totalFees computes total consumed miner fees in ETH. Block transactions and receipts have to have the same order.

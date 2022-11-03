@@ -210,7 +210,7 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time /*+blockInterval FIXME*/ > header.Time {
+	if parent.Time+blockInterval > header.Time {
 		return ErrInvalidTimestamp
 	}
 	return nil

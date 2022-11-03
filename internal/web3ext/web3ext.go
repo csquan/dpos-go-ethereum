@@ -30,7 +30,53 @@ var Modules = map[string]string{
 	"txpool":   TxpoolJs,
 	"les":      LESJs,
 	"vflux":    VfluxJs,
+	"harmony":  Harmony_JS,
 }
+
+const Harmony_JS = `
+web3._extend({
+	property: 'harmony',
+	methods: [
+		new web3._extend.Method({
+			name: 'getValidators',
+			call: 'harmony_getValidators',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getConfirmedBlockNumber',
+			call: 'harmony_getConfirmedBlockNumber',
+			params: 0,
+			outputFormatter: web3._extend.utils.toBigNumber
+		}),
+        new web3._extend.Method({
+			name: 'GetDelegateList',
+			call: 'harmony_getDelegateList',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'GetVoteList',
+			call: 'harmony_getVoteList',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'GetMintCnt',
+			call: 'harmony_getMintCnt',
+			params: 1
+		}),
+		new web3._extend.Method({
+			name: 'GetCandidates',
+			call: 'harmony_getCandidates',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'GetValidatorMintCnt',
+			call: 'harmony_getValidatorMintCnt',
+			params: 2
+		}),
+	]
+});
+`
 
 const CliqueJs = `
 web3._extend({

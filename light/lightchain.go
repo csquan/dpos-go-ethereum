@@ -55,7 +55,6 @@ type LightChain struct {
 	engine        consensus.Engine
 	odr           OdrBackend
 	chainFeed     event.Feed
-	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	scope         event.SubscriptionScope
 	genesisBlock  *types.Block
@@ -436,7 +435,7 @@ func (lc *LightChain) InsertHeaderChain(chain []*types.Header, checkFreq int) (i
 		lc.chainFeed.Send(core.ChainEvent{Block: block, Hash: block.Hash()})
 		lc.chainHeadFeed.Send(core.ChainHeadEvent{Block: block})
 	case core.SideStatTy:
-		lc.chainSideFeed.Send(core.ChainSideEvent{Block: block})
+		log.Error("no side chain allowed")
 	}
 	return 0, err
 }
@@ -565,11 +564,6 @@ func (lc *LightChain) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subsc
 // SubscribeChainHeadEvent registers a subscription of ChainHeadEvent.
 func (lc *LightChain) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
 	return lc.scope.Track(lc.chainHeadFeed.Subscribe(ch))
-}
-
-// SubscribeChainSideEvent registers a subscription of ChainSideEvent.
-func (lc *LightChain) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
-	return lc.scope.Track(lc.chainSideFeed.Subscribe(ch))
 }
 
 // SubscribeLogsEvent implements the interface of filters.Backend

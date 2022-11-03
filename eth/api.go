@@ -129,11 +129,6 @@ func (api *MinerAPI) SetEtherbase(etherbase common.Address) bool {
 	return true
 }
 
-// SetRecommitInterval updates the interval for miner sealing work recommitting.
-func (api *MinerAPI) SetRecommitInterval(interval int) {
-	api.e.Miner().SetRecommitInterval(time.Duration(interval) * time.Millisecond)
-}
-
 // AdminAPI is the collection of Ethereum full node related APIs for node
 // administration.
 type AdminAPI struct {

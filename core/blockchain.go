@@ -178,7 +178,6 @@ type BlockChain struct {
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
 	chainFeed     event.Feed
-	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
@@ -1382,7 +1381,7 @@ func (bc *BlockChain) writeBlockAndSetHead(block *types.Block, receipts []*types
 			bc.chainHeadFeed.Send(ChainHeadEvent{Block: block})
 		}
 	} else {
-		bc.chainSideFeed.Send(ChainSideEvent{Block: block})
+		log.Error("no side Event allowed")
 	}
 	return status, nil
 }
@@ -2148,9 +2147,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		bc.logsFeed.Send(mergeLogs(rebirthLogs, false))
 	}
 	if len(oldChain) > 0 {
-		for i := len(oldChain) - 1; i >= 0; i-- {
-			bc.chainSideFeed.Send(ChainSideEvent{Block: oldChain[i]})
-		}
+		log.Error("no new no old. no side chain allowed")
 	}
 	return nil
 }

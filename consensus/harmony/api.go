@@ -17,6 +17,7 @@
 package harmony
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math/big"
 
@@ -225,39 +226,40 @@ func (api *API) GetValidatorMintCnt(epochID int, addr string) (uint64, error) {
 
 // GetCandidates retrieves current candidates
 func (api *API) GetCandidates() ([]common.Address, error) {
-	//var header *types.Header
-	//var candidates []common.Address
-	//header = api.chain.CurrentHeader()
-	//
-	//if header == nil {
-	//	return nil, errUnknownBlock
-	//}
-	//
-	//candidateTrie, err := newCandidateTrie(header.EngineInfo.CandidateHash, api.engine.db)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//iterCandidates := candidateTrie.t.NodeIterator(nil)
-	//existCandidate := iterCandidates.Next(true)
-	//if !existCandidate {
-	//	//return nil, errors.New("no candidates")
-	//}
-	//for existCandidate {
-	//	addr1 := iterCandidates.
-	//	addr2 := iterCandidates.Value
-	//	if bytes.Equal(addr2, addr1) {
-	//
-	//	}
-	//	candidates = append(candidates, common.BytesToAddress(addr2))
-	//	existCandidate = iterCandidates.Next()
-	//}
-	//return candidates, nil
+	var header *types.Header
+	var candidates []common.Address
+	header = api.chain.CurrentHeader()
+
+	if header == nil {
+		return nil, errUnknownBlock
+	}
+
+	candidateTrie, err := newCandidateTrie(header.EngineInfo.CandidateHash, api.engine.db)
+	if err != nil {
+		return nil, err
+	}
+
+	iterCandidates := candidateTrie.Iterator(nil)
+	existCandidate := iterCandidates.Next()
+	if !existCandidate {
+		//return nil, errors.New("no candidates")
+	}
+	for existCandidate {
+		addr1 := iterCandidates.Key
+		addr2 := iterCandidates.Value
+		if bytes.Equal(addr2, addr1) {
+
+		}
+		candidates = append(candidates, common.BytesToAddress(addr2))
+		existCandidate = iterCandidates.Next()
+	}
+	return candidates, nil
 
 	//遍历测试
-	b, err := api.engine.ctx.candidateTrie.t.TryGet(common.HexToAddress("0x03796c32df43e1138946845f63c641be3b5f8570").Bytes())
-	if err != nil {
-		log.Info("++++++++++error++++++++++++: ")
-	}
-	log.Info("+++++++++canlidates+++++++++++: ", common.BytesToAddress(b).Hex())
-	return nil, nil
+	//b, err := api.engine.ctx.candidateTrie.t.TryGet(common.HexToAddress("0x03796c32df43e1138946845f63c641be3b5f8570").Bytes())
+	//if err != nil {
+	//	log.Info("++++++++++error++++++++++++: ")
+	//}
+	//log.Info("+++++++++canlidates+++++++++++: ", common.BytesToAddress(b).Hex())
+	//return nil, nil
 }

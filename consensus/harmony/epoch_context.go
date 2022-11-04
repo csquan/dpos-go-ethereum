@@ -91,11 +91,11 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 			cnt = binary.BigEndian.Uint64(cntBytes)
 		}
 		if cnt < epochDuration/blockInterval/maxValidatorSize/2 {
-			// not active validators need kickout
+			// not active validators need kick out
 			needKickOutValidators = append(needKickOutValidators, &sortableAddress{validator, big.NewInt(int64(cnt))})
 		}
 	}
-	// no validators need kickout
+	// no validators need kick out
 	needKickOutValidatorCnt := len(needKickOutValidators)
 	if needKickOutValidatorCnt <= 0 {
 		return nil
@@ -165,7 +165,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 	binary.BigEndian.PutUint64(prevEpochBytes, prevEpoch)
 	iter := ec.Context.mintCntTrie.Iterator(prevEpochBytes)
 	for i := prevEpoch; i < currentEpoch; i++ {
-		// if prevEpoch is not genesis, kick-out not active candidate
+		// if prevEpoch is not genesis, kick-out candidates not active
 		if !prevEpochIsGenesis && iter.Next() {
 			if err := ec.kickOutValidator(prevEpoch); err != nil {
 				return err

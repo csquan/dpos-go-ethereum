@@ -693,19 +693,9 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
-	var engineSnap *harmony.Context = nil
-	ha, ok := w.engine.(*harmony.Harmony)
-	if ok {
-		if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnDelegateTxType {
-			engineSnap = ha.Ctx().Snapshot()
-		}
-	}
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
-		if engineSnap != nil {
-			ha.Ctx().RevertToSnapShot(engineSnap)
-		}
 		return nil, err
 	}
 	env.txs = append(env.txs, tx)
@@ -1015,7 +1005,9 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 				}
 				return err
 			} else {
-				return run()
+				if err = run(); err != nil {
+					return err
+				}
 			}
 		}
 	}

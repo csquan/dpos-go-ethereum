@@ -222,7 +222,7 @@ func CreateConsensusEngine(stack *node.Node, chainConfig *params.ChainConfig, co
 	// If proof-of-authority is requested, set it up
 	var engine consensus.Engine
 	if chainConfig.Harmony != nil {
-		return harmony.New(chainConfig.Harmony, db)
+		return harmony.New(chainConfig, db)
 	}
 	if chainConfig.Clique != nil {
 		engine = clique.New(chainConfig.Clique, db)

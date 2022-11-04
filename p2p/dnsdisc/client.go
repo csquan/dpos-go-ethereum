@@ -285,7 +285,7 @@ func (it *randomIterator) nextNode() *enode.Node {
 			if errors.Is(err, it.ctx.Err()) {
 				return nil // context canceled.
 			}
-			it.c.cfg.Logger.Debug("Error in DNS random node sync", "tree", ct.loc.domain, "err", err)
+			it.c.cfg.Logger.Trace("Error in DNS random node sync", "tree", ct.loc.domain, "err", err)
 			continue
 		}
 		if n != nil {

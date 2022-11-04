@@ -68,8 +68,8 @@ var (
 	ErrWaitForPrevBlock           = errors.New("wait for last block arrived")
 	ErrMintFutureBlock            = errors.New("mint the future block")
 	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
-	ErrInvalidBlockValidator      = errors.New("invalid block validator")
-	ErrInvalidMintBlockTime       = errors.New("invalid time to mint the block")
+	ErrInvalidBlockValidator      = errors.New("not my turn")
+	ErrInvalidMintBlockTime       = errors.New("not mining time")
 	ErrNilBlockHeader             = errors.New("nil block header returned")
 )
 var (
@@ -83,6 +83,7 @@ type Harmony struct {
 	ctx                  *Context
 	signatures           *lru.ARCCache // Signatures of recent blocks to speed up mining
 	signer               common.Address
+	txSigner             types.Signer
 	signFn               SignerFn
 	confirmedBlockHeader *types.Header
 
@@ -145,13 +146,14 @@ func sigHash(header *types.Header) (hash common.Hash) {
 	return hash
 }
 
-func New(config *params.HarmonyConfig, engineDB ethdb.Database) *Harmony {
+func New(config *params.ChainConfig, engineDB ethdb.Database) *Harmony {
 	signatures, _ := lru.NewARC(inMemorySignatures)
 	ctx, _ := NewEmptyContext(engineDB)
 	return &Harmony{
-		config:     config,
+		config:     config.Harmony,
 		db:         engineDB,
 		ctx:        ctx,
+		txSigner:   types.LatestSigner(config),
 		signatures: signatures,
 	}
 }
@@ -405,6 +407,9 @@ func (h *Harmony) Finalize(
 	if err != nil {
 		log.Error("got error when elect next epoch,", "err", err)
 	}
+
+	// apply vote txs here, these tx is no reason to fail, no err no revert needed
+	h.applyVoteTxs(txs)
 	//update mint count trie
 	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
 	if header.EngineInfo, err = h.ctx.Commit(); err != nil {
@@ -419,6 +424,35 @@ func (h *Harmony) Finalize(
 		"bn", header.Number,
 		"engine", header.EngineInfo.String(),
 		"root", header.Root.String())
+}
+
+func (h *Harmony) applyVoteTxs(txs []*types.Transaction) {
+	for _, tx := range txs {
+		if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnDelegateTxType {
+			from, err := types.Sender(h.txSigner, tx)
+			if err != nil {
+				log.Warn("get sender", "err", err)
+			}
+			switch tx.Type() {
+			case types.CandidateTxType:
+				if err = h.Ctx().BecomeCandidate(from); err != nil {
+					log.Warn("become candidate", "err", err)
+				}
+			case types.UnCandidateTxType:
+				if err = h.Ctx().KickOutCandidate(from); err != nil {
+					log.Warn("leave candidate", "err", err)
+				}
+			case types.DelegateTxType:
+				if err = h.Ctx().Delegate(from, *tx.To()); err != nil {
+					log.Warn("delegating", "err", err)
+				}
+			case types.UnDelegateTxType:
+				if err = h.Ctx().UnDelegate(from, *tx.To()); err != nil {
+					log.Warn("leave delegating", "err", err)
+				}
+			}
+		}
+	}
 }
 
 func (h *Harmony) checkDeadline(lastBlock *types.Block, now uint64) error {

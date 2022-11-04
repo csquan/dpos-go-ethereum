@@ -18,6 +18,7 @@ package core
 
 import (
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"sort"
@@ -611,6 +612,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Drop non-local transactions under our own minimal accepted gas price or tip
 	if !local && tx.GasTipCapIntCmp(pool.gasPrice) < 0 {
+		log.Warn("UnderPriced", "tx", tx.GasPrice().Uint64(), "pool", pool.gasPrice.Uint64())
 		return ErrUnderpriced
 	}
 	// Ensure the transaction adheres to nonce ordering
@@ -853,7 +855,7 @@ func (pool *TxPool) AddRemotes(txs []*types.Transaction) []error {
 	return pool.addTxs(txs, false, false)
 }
 
-// This is like AddRemotes, but waits for pool reorganization. Tests use this method.
+// AddRemotesSync is like AddRemotes, but waits for pool reorganization. Tests use this method.
 func (pool *TxPool) AddRemotesSync(txs []*types.Transaction) []error {
 	return pool.addTxs(txs, false, true)
 }
@@ -873,6 +875,27 @@ func (pool *TxPool) AddRemote(tx *types.Transaction) error {
 	return errs[0]
 }
 
+// logTxDebug display all q info in pool
+func (pool *TxPool) logTxDebug(seq string) {
+	for _, tx := range pool.all.remotes {
+		log.Debug("pool.all.remote", "i", seq, "tx", txString(tx, pool.signer))
+	}
+	for a, lst := range pool.pending {
+		for i, tx := range lst.txs.items {
+			log.Debug("pending list", "i", seq, "addr", a, "n", i, "tx", txString(tx, pool.signer))
+		}
+	}
+	for a, lst := range pool.queue {
+		for i, tx := range lst.txs.items {
+			log.Debug("queue list", "i", seq, "addr", a, "n", i, "tx", txString(tx, pool.signer))
+		}
+	}
+	for a, n := range pool.pendingNonces.nonces {
+		s := pool.currentState.GetNonce(a)
+		log.Debug("nonce in pending and state", "i", seq, "addr", a, "pending", n, "state", s)
+	}
+}
+
 // addTxs attempts to queue a batch of transactions if they are valid.
 func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	// Filter out known ones without obtaining the pool lock or recovering signatures
@@ -881,6 +904,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		news = make([]*types.Transaction, 0, len(txs))
 	)
 	for i, tx := range txs {
+		log.Debug("tx coming", "i", i, "tx", txString(tx, pool.signer), "local", local, "sync", sync)
 		// If the transaction is known, pre-set the error slot
 		if pool.all.Get(tx.Hash()) != nil {
 			errs[i] = ErrAlreadyKnown
@@ -906,6 +930,12 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	// Process all the new transaction and merge any errors into the original slice
 	pool.mu.Lock()
 	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
+	for i, err := range newErrs {
+		if err != nil {
+			log.Warn("addTxsLocked errs", "i", i, "err", err)
+		}
+	}
+	pool.logTxDebug("after addTxsLocked")
 	pool.mu.Unlock()
 
 	var nilSlot = 0
@@ -1184,6 +1214,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 
 	dropBetweenReorgHistogram.Update(int64(pool.changesSinceReorg))
 	pool.changesSinceReorg = 0 // Reset change counter
+	pool.logTxDebug("after reorg")
 	pool.mu.Unlock()
 
 	// Notify subsystems for newly added transactions
@@ -1804,4 +1835,14 @@ func (t *txLookup) RemotesBelowTip(threshold *big.Int) types.Transactions {
 // numSlots calculates the number of slots needed for a single transaction.
 func numSlots(tx *types.Transaction) int {
 	return int((tx.Size() + txSlotSize - 1) / txSlotSize)
+}
+
+func txString(tx *types.Transaction, signer types.Signer) string {
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		return "check from error:" + err.Error()
+	}
+	return fmt.Sprintf("{from: %s, to: %s, type: %d, nonce: %d, gas: %d, gasPrice: %d, gasTipCap: %d, gasFeeCap: %d, cost: %d, txHash: %s}",
+		from, tx.To(), tx.Type(), tx.Nonce(), tx.Gas(), tx.GasPrice(), tx.GasTipCap(), tx.GasFeeCap(),
+		tx.Cost(), tx.Hash().Hex())
 }

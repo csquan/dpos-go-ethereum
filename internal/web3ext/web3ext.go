@@ -765,6 +765,12 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
 		}),
 		new web3._extend.Method({
+			name: 'becomeCanlidate',
+			call: 'personal_becomeCanlidate',
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputFormatter]
+		}),
+		new web3._extend.Method({
 			name: 'unpair',
 			call: 'personal_unpair',
 			params: 2

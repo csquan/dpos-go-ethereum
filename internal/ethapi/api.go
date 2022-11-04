@@ -468,6 +468,24 @@ func (s *PersonalAccountAPI) SendTransaction(ctx context.Context, args Transacti
 	return SubmitTransaction(ctx, s.b, signed)
 }
 
+// becomeCanlidate will create a transaction from the given arguments and
+// tries to sign it with the key associated with args.From. If the given
+// passwd isn't able to decrypt the key it fails.
+func (s *PersonalAccountAPI) becomeCanlidate(ctx context.Context, args TransactionArgs, passwd string) (common.Hash, error) {
+	if args.Nonce == nil {
+		// Hold the addresse's mutex around signing to prevent concurrent assignment of
+		// the same nonce to multiple accounts.
+		s.nonceLock.LockAddr(args.from())
+		defer s.nonceLock.UnlockAddr(args.from())
+	}
+	signed, err := s.signTransaction(ctx, &args, passwd)
+	if err != nil {
+		log.Warn("Failed transaction send attempt", "from", args.from(), "to", args.To, "value", args.Value.ToInt(), "err", err)
+		return common.Hash{}, err
+	}
+	return SubmitTransaction(ctx, s.b, signed)
+}
+
 // SignTransaction will create a transaction from the given arguments and
 // tries to sign it with the key associated with args.From. If the given passwd isn't
 // able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast
@@ -1697,6 +1715,37 @@ func (s *TransactionAPI) SendTransaction(ctx context.Context, args TransactionAr
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err
 	}
+	// Assemble the transaction and sign with the wallet
+	tx := args.toTransaction()
+
+	signed, err := wallet.SignTx(account, tx, s.b.ChainConfig().ChainID)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return SubmitTransaction(ctx, s.b, signed)
+}
+
+// 将地址加入候选树中
+func (s *TransactionAPI) BecomeCanlidate(ctx context.Context, addr string) (common.Hash, error) {
+	var args TransactionArgs
+	from := common.HexToAddress(addr)
+	args.From = &from
+
+	// Look up the wallet containing the requested signer
+	account := accounts.Account{Address: args.from()}
+
+	wallet, err := s.b.AccountManager().Find(account)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	//args.Nonce = 1,
+	//args.Gas =
+	//	GasPrice: (*big.Int)(args.GasPrice),
+	//	Value:    (*big.Int)(args.Value),
+	//	Data:     args.data(),
+	//
 	// Assemble the transaction and sign with the wallet
 	tx := args.toTransaction()
 

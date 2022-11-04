@@ -225,8 +225,22 @@ func (c *Context) KickOutCandidate(candidateAddr common.Address) error {
 }
 
 func (c *Context) BecomeCandidate(candidateAddr common.Address) error {
+	candidateRLP, err := rlp.EncodeToBytes(candidateAddr)
+	if err != nil {
+		return fmt.Errorf("failed to encode candidates to rlp bytes: %s", err)
+	}
+
 	candidate := candidateAddr.Bytes()
-	return c.candidateTrie.t.TryUpdate(candidate, candidate)
+	c.candidateTrie.t.TryUpdate(candidate, candidateRLP)
+
+	//遍历测试
+	b, err := c.candidateTrie.t.TryGet(candidate)
+	if err != nil {
+		log.Info("++++++++++error++++++++++++: ")
+	}
+	log.Info("+++++++++canlidates+++++++++++: ", common.BytesToAddress(b).Hex())
+
+	return nil
 }
 
 func (c *Context) Delegate(delegatorAddr, candidateAddr common.Address) error {

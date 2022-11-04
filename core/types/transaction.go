@@ -196,9 +196,26 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner DynamicFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case CandidateTxType:
+		var inner VoteTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case UnCandidateTxType:
+		var inner VoteTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case DelegateTxType:
+		var inner VoteTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case UnDelegateTxType:
+		var inner VoteTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
+	return nil, nil
 }
 
 // setDecoded sets the inner transaction and size after decoding.
@@ -283,7 +300,9 @@ func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.ga
 func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
 
 // GasFeeCap returns the fee cap per gas of the transaction.
-func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
+func (tx *Transaction) GasFeeCap() *big.Int {
+	return new(big.Int).Set(tx.inner.gasFeeCap())
+}
 
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
@@ -602,6 +621,7 @@ type Message struct {
 	data       []byte
 	accessList AccessList
 	isFake     bool
+	txType     uint8
 }
 
 func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice, gasFeeCap, gasTipCap *big.Int, data []byte, accessList AccessList, isFake bool) Message {
@@ -633,6 +653,7 @@ func (tx *Transaction) AsMessage(s Signer, baseFee *big.Int) (Message, error) {
 		data:       tx.Data(),
 		accessList: tx.AccessList(),
 		isFake:     false,
+		txType:     tx.Type(),
 	}
 	// If baseFee provided, set gasPrice to effectiveGasPrice.
 	if baseFee != nil {

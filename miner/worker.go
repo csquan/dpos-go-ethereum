@@ -700,6 +700,24 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 			engineSnap = ha.Ctx().Snapshot()
 		}
 	}
+	if tx.Type() == types.CandidateTxType || tx.Type() == types.CandidateTxType || tx.Type() == types.CandidateTxType || tx.Type() == types.CandidateTxType {
+		msg, err := tx.AsMessage(types.MakeSigner(w.chainConfig, env.header.Number), env.header.BaseFee)
+		if err != nil {
+			return nil, err
+		}
+
+		switch tx.Type() {
+		case types.CandidateTxType:
+			ha.Ctx().BecomeCandidate(msg.From())
+		case types.UnCandidateTxType:
+			ha.Ctx().KickOutCandidate(msg.From())
+		case types.DelegateTxType:
+			ha.Ctx().Delegate(msg.From(), *(msg.To()))
+		case types.UnDelegateTxType:
+			ha.Ctx().UnDelegate(msg.From(), *(msg.To()))
+		}
+	}
+
 	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
@@ -746,6 +764,7 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 		}
 		// Retrieve the next transaction and abort if all done
 		tx := txs.Peek()
+		log.Info("+++++++++++++++tx Peek+++++++++++")
 		if tx == nil {
 			break
 		}

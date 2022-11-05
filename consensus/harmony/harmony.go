@@ -44,6 +44,8 @@ var (
 	timeOfFirstBlock = uint64(0)
 
 	confirmedBlockHead = []byte("confirmed-block-head")
+
+	globalParams = "hui chan global params"
 )
 
 var (
@@ -378,7 +380,10 @@ func (h *Harmony) Prepare(chain consensus.ChainHeaderReader, header *types.Heade
 
 func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
 	// Select the correct block reward based on chain progression
-	state.AddBalance(header.Coinbase, frontierBlockReward)
+	// 奖励应该从state中取
+	obj := state.GetStateParamsObject(globalParams)
+	rewards := obj.BlockRewards()
+	state.AddBalance(header.Coinbase, rewards)
 }
 
 func (h *Harmony) Finalize(

@@ -32,3 +32,9 @@ type StateAccount struct {
 	Root     common.Hash // merkle root of the storage trie
 	CodeHash []byte
 }
+
+type StateParams struct {
+	BlockRewards *big.Int
+	Root         common.Hash // merkle root of the storage trie
+	CodeHash     []byte
+}

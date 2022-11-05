@@ -41,6 +41,10 @@ type revision struct {
 }
 
 var (
+	frontierBlockReward = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
+)
+
+var (
 	// emptyRoot is the known root hash of an empty trie.
 	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
@@ -81,6 +85,11 @@ type StateDB struct {
 	stateObjects        map[common.Address]*stateObject
 	stateObjectsPending map[common.Address]struct{} // State objects finalized but not yet written to the trie
 	stateObjectsDirty   map[common.Address]struct{} // State objects modified in the current execution
+
+	// This map holds 'live' objects, which will get modified while processing a state transition.
+	stateParamsObjects        map[string]*stateParamsObject
+	stateParamsObjectsPending map[common.Address]struct{} // State objects finalized but not yet written to the trie
+	stateParamsObjectsDirty   map[common.Address]struct{} // State objects modified in the current execution
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -134,18 +143,22 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		return nil, err
 	}
 	sdb := &StateDB{
-		db:                  db,
-		trie:                tr,
-		originalRoot:        root,
-		snaps:               snaps,
-		stateObjects:        make(map[common.Address]*stateObject),
-		stateObjectsPending: make(map[common.Address]struct{}),
-		stateObjectsDirty:   make(map[common.Address]struct{}),
-		logs:                make(map[common.Hash][]*types.Log),
-		preimages:           make(map[common.Hash][]byte),
-		journal:             newJournal(),
-		accessList:          newAccessList(),
-		hasher:              crypto.NewKeccakState(),
+		db:                        db,
+		trie:                      tr,
+		originalRoot:              root,
+		snaps:                     snaps,
+		stateObjects:              make(map[common.Address]*stateObject),
+		stateObjectsPending:       make(map[common.Address]struct{}),
+		stateObjectsDirty:         make(map[common.Address]struct{}),
+		stateParamsObjects:        make(map[string]*stateParamsObject),
+		stateParamsObjectsPending: make(map[common.Address]struct{}),
+		stateParamsObjectsDirty:   make(map[common.Address]struct{}),
+
+		logs:       make(map[common.Hash][]*types.Log),
+		preimages:  make(map[common.Hash][]byte),
+		journal:    newJournal(),
+		accessList: newAccessList(),
+		hasher:     crypto.NewKeccakState(),
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -499,6 +512,16 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	return nil
 }
 
+// getStateObject retrieves a state object given by the address, returning nil if
+// the object is not found or was deleted in this execution context. If you need
+// to differentiate between non-existent/just-deleted, use getDeletedStateObject.
+func (s *StateDB) GetStateParamsObject(name string) *stateParamsObject {
+	if obj := s.stateParamsObjects[name]; obj != nil {
+		return obj
+	}
+	return nil
+}
+
 // getDeletedStateObject is similar to getStateObject, but instead of returning
 // nil for a deleted state object, it returns the actual object with the deleted
 // flag set. This is needed by the state journal to revert to the correct s-
@@ -560,6 +583,10 @@ func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
 }
 
+func (s *StateDB) setStateParamsObject(object *stateParamsObject) {
+	s.stateParamsObjects[string(object.name)] = object
+}
+
 // GetOrNewStateObject retrieves a state object or create a new state object if nil.
 func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 	stateObject := s.getStateObject(addr)
@@ -594,6 +621,14 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	return newobj, nil
 }
 
+// createObject creates a new state object. If there is an existing account with
+// the given address, it is overwritten and returned as the second return value.
+func (s *StateDB) createParamsObject(name []byte) (newobj *stateParamsObject) {
+	newobj = newParamsObject(s, name, types.StateParams{})
+	s.setStateParamsObject(newobj)
+	return newobj
+}
+
 // CreateAccount explicitly creates a state object. If a state object with the address
 // already exists the balance is carried over to the new account.
 //
@@ -609,6 +644,12 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 	}
+}
+
+// 创世调用:创建一个参数存储state
+func (s *StateDB) CreateParamsStore(name []byte) {
+	newObj := s.createParamsObject(name)
+	newObj.setBalance(frontierBlockReward)
 }
 
 func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {

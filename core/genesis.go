@@ -44,6 +44,7 @@ import (
 //go:generate go run github.com/fjl/gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
+var globalParams = "hui chan global params"
 
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
@@ -98,6 +99,9 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 			statedb.SetState(addr, key, value)
 		}
 	}
+
+	statedb.CreateParamsStore([]byte(globalParams))
+
 	return statedb.Commit(false)
 }
 
@@ -280,6 +284,7 @@ func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, override
 		if genesis == nil {
 			genesis = DefaultGenesisBlock()
 		}
+
 		// Ensure the stored genesis matches with the given one.
 		hash := genesis.ToBlock(db).Hash()
 		if hash != stored {

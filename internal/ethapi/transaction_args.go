@@ -262,7 +262,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
-	case args.Type >= types.CandidateTxType && args.Type <= types.CandidateTxType: //投票相关交易这里实例化
+	case args.Type >= types.CandidateTxType && args.Type <= types.UnDelegateTxType: //投票相关交易这里实例化
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList

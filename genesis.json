@@ -1,0 +1,17 @@
+{
+  "config": {
+    "chainId": 8888,
+    "harmony": {
+      "validators": [
+        "0x66bba4eb43741f8cd8da1b0bdca631658b4ba6ca",
+        "0x4a2bf49813b5e07a5c5e8a478031942ba946d6a1",
+        "0x332808df02e07cba54c67a7d89bc3bc18bd15bba",
+        "0x79e30256eea7bafbf6723f01bdb969551ab62abf",
+        "0xd6107a504ded7b233fc6a75709c2112005480019"
+      ]
+    }
+  },
+  "difficulty": "1",
+  "gasLimit": "50000000",
+  "alloc": { "0xab41dedc0b7333fd76a0619a145a4aa3492cb017": { "balance": "0xabcdefabcdefabcdefabcdef" } }
+}

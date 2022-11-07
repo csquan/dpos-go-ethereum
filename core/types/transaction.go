@@ -57,6 +57,8 @@ const (
 	UnCandidateTxType
 	DelegateTxType
 	UnDelegateTxType
+	ProposalTxType
+	ApproveProposalTxType
 )
 
 // Transaction is an Ethereum transaction.

@@ -86,9 +86,9 @@ type Harmony struct {
 	txSigner             types.Signer
 	signFn               SignerFn
 	confirmedBlockHeader *types.Header
-
-	mu   sync.RWMutex
-	stop chan bool
+	global               types.GlobalParams
+	mu                   sync.RWMutex
+	stop                 chan bool
 }
 
 func (h *Harmony) FinalizeAndAssemble(
@@ -410,6 +410,11 @@ func (h *Harmony) Finalize(
 
 	// apply vote txs here, these tx is no reason to fail, no err no revert needed
 	h.applyVoteTxs(txs)
+
+	//提案交易-将ID返回 todo:调整位置
+	validators, _ := h.ctx.GetValidators()
+	h.global.ApplyProposals(txs, validators)
+
 	//update mint count trie
 	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
 	if header.EngineInfo, err = h.ctx.Commit(); err != nil {

@@ -46,7 +46,8 @@ var (
 
 var (
 	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	emptyRoot    = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
+	globalParams = "hui chan global params"
 )
 
 type proofList [][]byte
@@ -88,8 +89,8 @@ type StateDB struct {
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateParamsObjects        map[string]*stateParamsObject
-	stateParamsObjectsPending map[common.Address]struct{} // State objects finalized but not yet written to the trie
-	stateParamsObjectsDirty   map[common.Address]struct{} // State objects modified in the current execution
+	stateParamsObjectsPending map[string]struct{} // State objects finalized but not yet written to the trie
+	stateParamsObjectsDirty   map[string]struct{} // State objects modified in the current execution
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -151,8 +152,8 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		stateObjectsPending:       make(map[common.Address]struct{}),
 		stateObjectsDirty:         make(map[common.Address]struct{}),
 		stateParamsObjects:        make(map[string]*stateParamsObject),
-		stateParamsObjectsPending: make(map[common.Address]struct{}),
-		stateParamsObjectsDirty:   make(map[common.Address]struct{}),
+		stateParamsObjectsPending: make(map[string]struct{}),
+		stateParamsObjectsDirty:   make(map[string]struct{}),
 
 		logs:       make(map[common.Hash][]*types.Log),
 		preimages:  make(map[common.Hash][]byte),
@@ -686,18 +687,21 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
-		db:                  s.db,
-		trie:                s.db.CopyTrie(s.trie),
-		originalRoot:        s.originalRoot,
-		stateObjects:        make(map[common.Address]*stateObject, len(s.journal.dirties)),
-		stateObjectsPending: make(map[common.Address]struct{}, len(s.stateObjectsPending)),
-		stateObjectsDirty:   make(map[common.Address]struct{}, len(s.journal.dirties)),
-		refund:              s.refund,
-		logs:                make(map[common.Hash][]*types.Log, len(s.logs)),
-		logSize:             s.logSize,
-		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
-		journal:             newJournal(),
-		hasher:              crypto.NewKeccakState(),
+		db:                        s.db,
+		trie:                      s.db.CopyTrie(s.trie),
+		originalRoot:              s.originalRoot,
+		stateObjects:              make(map[common.Address]*stateObject, len(s.journal.dirties)),
+		stateObjectsPending:       make(map[common.Address]struct{}, len(s.stateObjectsPending)),
+		stateObjectsDirty:         make(map[common.Address]struct{}, len(s.journal.dirties)),
+		stateParamsObjects:        make(map[string]*stateParamsObject, 1),
+		stateParamsObjectsPending: make(map[string]struct{}, 1),
+		stateParamsObjectsDirty:   make(map[string]struct{}, 1),
+		refund:                    s.refund,
+		logs:                      make(map[common.Hash][]*types.Log, len(s.logs)),
+		logSize:                   s.logSize,
+		preimages:                 make(map[common.Hash][]byte, len(s.preimages)),
+		journal:                   newJournal(),
+		hasher:                    crypto.NewKeccakState(),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -715,6 +719,7 @@ func (s *StateDB) Copy() *StateDB {
 			state.stateObjectsPending[addr] = struct{}{} // Mark the copy pending to force external (account) commits
 		}
 	}
+
 	// Above, we don't copy the actual journal. This means that if the copy is copied, the
 	// loop above will be a no-op, since the copy's journal is empty.
 	// Thus, here we iterate over stateObjects, to enable copies of copies
@@ -730,6 +735,18 @@ func (s *StateDB) Copy() *StateDB {
 		}
 		state.stateObjectsDirty[addr] = struct{}{}
 	}
+
+	//read params from last state
+	if object, exist := s.stateParamsObjects[globalParams]; exist {
+		// Even though the original object is dirty, we are not copying the journal,
+		// so we need to make sure that anyside effect the journal would have caused
+		// during a commit (or similar op) is already applied to the copy.
+		state.stateParamsObjects[globalParams] = object.deepCopy(state)
+
+		state.stateParamsObjectsDirty[globalParams] = struct{}{}   // Mark the copy dirty to force internal (code/state) commits
+		state.stateParamsObjectsPending[globalParams] = struct{}{} // Mark the copy pending to force external (account) commits
+	}
+
 	for hash, logs := range s.logs {
 		cpy := make([]*types.Log, len(logs))
 		for i, l := range logs {
@@ -974,6 +991,23 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
 	}
+	// store params into db
+	obj := s.stateParamsObjects[globalParams]
+	if obj != nil && !obj.deleted {
+		// Write any storage changes in the state object to its storage trie
+		set, err := obj.CommitTrie(s.db)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		// Merge the dirty nodes of storage trie into global set
+		if set != nil {
+			if err := nodes.Merge(set); err != nil {
+				return common.Hash{}, err
+			}
+			storageTrieNodes += set.Len()
+		}
+	}
+
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
 			log.Crit("Failed to commit dirty codes", "error", err)

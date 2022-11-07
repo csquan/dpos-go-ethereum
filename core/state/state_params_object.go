@@ -274,56 +274,17 @@ func (s *stateParamsObject) finalise(prefetch bool) {
 func (s *stateParamsObject) updateTrie(db Database) Trie {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch anymore, pull directly if need be
-	if len(s.pendingStorage) == 0 {
-		return s.trie
-	}
-	// Track the amount of time wasted on updating the storage trie
-	if metrics.EnabledExpensive {
-		defer func(start time.Time) { s.db.StorageUpdates += time.Since(start) }(time.Now())
-	}
-	// The snapshot storage map for the object
-	var storage map[common.Hash][]byte
+
 	// Insert all the pending updates into the trie
 	tr := s.getTrie(db)
-	hasher := s.db.hasher
+	key := []byte(globalParams)
+	// Encoding []byte cannot fail, ok to ignore the error.
+	v, _ := rlp.EncodeToBytes(s.data)
 
-	usedStorage := make([][]byte, 0, len(s.pendingStorage))
-	for key, value := range s.pendingStorage {
-		// Skip noop changes, persist actual changes
-		if value == s.originStorage[key] {
-			continue
-		}
-		s.originStorage[key] = value
+	err := tr.TryUpdate(key[:], v)
+	s.setError(err)
+	s.db.StorageUpdated += 1
 
-		var v []byte
-		if (value == common.Hash{}) {
-			s.setError(tr.TryDelete(key[:]))
-			s.db.StorageDeleted += 1
-		} else {
-			// Encoding []byte cannot fail, ok to ignore the error.
-			v, _ = rlp.EncodeToBytes(common.TrimLeftZeroes(value[:]))
-			s.setError(tr.TryUpdate(key[:], v))
-			s.db.StorageUpdated += 1
-		}
-		// If state snapshotting is active, cache the data til commit
-		if s.db.snap != nil {
-			if storage == nil {
-				// Retrieve the old storage map, if available, create a new one otherwise
-				if storage = s.db.snapStorage[s.nameHash]; storage == nil {
-					storage = make(map[common.Hash][]byte)
-					s.db.snapStorage[s.nameHash] = storage
-				}
-			}
-			storage[crypto.HashData(hasher, key[:])] = v // v will be nil if it's deleted
-		}
-		usedStorage = append(usedStorage, common.CopyBytes(key[:])) // Copy needed for closure
-	}
-	if s.db.prefetcher != nil {
-		s.db.prefetcher.used(s.nameHash, s.data.Root, usedStorage)
-	}
-	if len(s.pendingStorage) > 0 {
-		s.pendingStorage = make(Storage)
-	}
 	return tr
 }
 

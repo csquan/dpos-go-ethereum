@@ -100,8 +100,6 @@ func (ga *GenesisAlloc) deriveHash() (common.Hash, error) {
 		}
 	}
 
-	statedb.CreateParamsStore([]byte(globalParams))
-
 	return statedb.Commit(false)
 }
 
@@ -121,6 +119,8 @@ func (ga *GenesisAlloc) flush(db ethdb.Database) error {
 			statedb.SetState(addr, key, value)
 		}
 	}
+	statedb.CreateParamsStore([]byte(globalParams))
+
 	root, err := statedb.Commit(false)
 	if err != nil {
 		return err

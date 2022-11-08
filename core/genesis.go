@@ -524,10 +524,10 @@ func initGenesisHarmonyContext(g *Genesis, db ethdb.Database) *types.EngineInfo 
 			log.Error("SetValidators", "err", err)
 		}
 		for _, validator := range g.Config.Harmony.Validators {
-			if err := ctx.BecomeCandidate(validator); err != nil {
+			if err := ctx.CandidateTrie().TryUpdate(validator.Bytes(), validator.Bytes()); err != nil {
 				log.Error("Update Candidates", "err", err)
 			}
-			if err := ctx.Delegate(validator, validator); err != nil {
+			if err := ctx.DelegateTrie().TryUpdate(append(validator.Bytes(), validator.Bytes()...), validator.Bytes()); err != nil {
 				log.Error("Update Delegates", "err", err)
 			}
 		}

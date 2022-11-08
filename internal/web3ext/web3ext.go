@@ -50,27 +50,27 @@ web3._extend({
 			outputFormatter: web3._extend.utils.toBigNumber
 		}),
         new web3._extend.Method({
-			name: 'GetDelegateList',
+			name: 'getDelegateList',
 			call: 'harmony_getDelegateList',
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'GetVoteList',
+			name: 'getVoteList',
 			call: 'harmony_getVoteList',
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'GetMintCnt',
+			name: 'getMintCnt',
 			call: 'harmony_getMintCnt',
 			params: 1
 		}),
 		new web3._extend.Method({
-			name: 'GetCandidates',
+			name: 'getCandidates',
 			call: 'harmony_getCandidates',
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'GetValidatorMintCnt',
+			name: 'getValidatorMintCnt',
 			call: 'harmony_getValidatorMintCnt',
 			params: 2
 		}),
@@ -765,8 +765,8 @@ web3._extend({
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter, null]
 		}),
 		new web3._extend.Method({
-			name: 'becomeCanlidate',
-			call: 'personal_becomeCanlidate',
+			name: 'becomeCandidate',
+			call: 'personal_becomeCandidate',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputFormatter]
 		}),

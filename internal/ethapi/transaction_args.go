@@ -262,12 +262,29 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (t
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
-	case args.Type >= types.CandidateTxType && args.Type <= types.UnDelegateTxType: //投票相关交易这里实例化
+	case args.Type >= types.CandidateTxType && args.Type <= types.UnDelegateTxType: //投票相关交易实例化
 		al := types.AccessList{}
 		if args.AccessList != nil {
 			al = *args.AccessList
 		}
 		data = &types.VoteTx{
+			To:         args.To,
+			ChainID:    (*big.Int)(args.ChainID),
+			Nonce:      uint64(*args.Nonce),
+			Gas:        uint64(*args.Gas),
+			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
+			Value:      (*big.Int)(args.Value),
+			Data:       args.data(),
+			AccessList: al,
+			Type:       args.Type,
+		}
+	case args.Type >= types.ProposalTxType && args.Type <= types.ApproveProposalTxType: //提案相关交易实例化
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.ProposalTx{
 			To:         args.To,
 			ChainID:    (*big.Int)(args.ChainID),
 			Nonce:      uint64(*args.Nonce),

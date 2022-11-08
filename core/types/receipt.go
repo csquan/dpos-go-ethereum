@@ -399,6 +399,12 @@ func (rs Receipts) EncodeIndex(i int, w *bytes.Buffer) {
 	case UnDelegateTxType:
 		w.WriteByte(UnDelegateTxType)
 		rlp.Encode(w, data)
+	case ProposalTxType:
+		w.WriteByte(ProposalTxType)
+		rlp.Encode(w, data)
+	case ApproveProposalTxType:
+		w.WriteByte(ApproveProposalTxType)
+		rlp.Encode(w, data)
 	default:
 		// For unsupported types, write nothing. Since this is for
 		// DeriveSha, the error will be caught matching the derived hash

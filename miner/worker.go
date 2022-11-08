@@ -79,6 +79,7 @@ const (
 )
 
 var (
+	errInvalidSign                = errors.New("tx is not sign by valid validator")
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 )
@@ -178,11 +179,12 @@ type getWorkReq struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
-	config      *Config
-	chainConfig *params.ChainConfig
-	engine      consensus.Engine
-	eth         Backend
-	chain       *core.BlockChain
+	config       *Config
+	chainConfig  *params.ChainConfig
+	GlobalParams types.GlobalParams
+	engine       consensus.Engine
+	eth          Backend
+	chain        *core.BlockChain
 
 	// Feeds
 	pendingLogsFeed event.Feed
@@ -268,6 +270,7 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 
+	worker.GlobalParams.Init() //全局参数初始化
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
 	if recommit < minRecommitInterval {
@@ -958,6 +961,15 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	w.current = work
 }
 
+func in(target common.Address, str_array []common.Address) bool {
+	for _, element := range str_array {
+		if target == element {
+			return true
+		}
+	}
+	return false
+}
+
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 // Note the assumption is held that the mutation is allowed to the passed env, do
@@ -968,23 +980,33 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 
 		//提案交易
 		if engine, ok := w.engine.(*harmony.Harmony); ok {
-			globalParams := engine.GlobalParams()
 			for _, tx := range env.txs {
 				if tx.Type() == types.ProposalTxType { //提案交易
 					log.Info("++++++++got ProposalTxType++++++")
-					len := len(globalParams.ValidProposals)
-					id := fmt.Sprintf("%s.%d", params.Version, len+1)
-					globalParams.ValidProposals[id] = tx.Hash()
-					engine.SetGlobalParams(globalParams)
+					len := len(w.GlobalParams.ValidProposals)
+					id := fmt.Sprintf("%s.%d", params.Version, len)
+					w.GlobalParams.ValidProposals[id] = tx.Hash()
 				}
 				if tx.Type() == types.ApproveProposalTxType { //表决交易
 					validators, _ := engine.Ctx().GetValidators()
-					globalparams := engine.GlobalParams()
 					id := string(tx.Data())
-					hash := globalparams.ValidProposals[id]
-					proposalTx := w.eth.BlockChain().GetTransaction(hash)
 
-					globalparams.ApplyProposals(tx, validators, proposalTx)
+					if hash, ok := w.GlobalParams.ValidProposals[id]; ok { // 存在有效提案
+						proposalTx := w.eth.BlockChain().GetTransaction(hash)
+
+						//找到tx的from地址
+						msg, err := tx.AsMessage(types.MakeSigner(w.chainConfig, env.header.Number), env.header.BaseFee)
+						if err != nil {
+							return err
+						}
+
+						result := in(msg.From(), validators) //交易的from是否是验证者地址
+						if result == false {
+							return errInvalidSign
+						}
+						w.GlobalParams.ProposalApproves[id] = append(w.GlobalParams.ProposalApproves[id], msg.From())
+						w.GlobalParams.ApplyProposals(tx, proposalTx)
+					}
 				}
 			}
 		}

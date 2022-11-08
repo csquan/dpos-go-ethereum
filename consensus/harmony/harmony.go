@@ -31,7 +31,7 @@ const (
 
 	blockInterval    = uint64(2)
 	epochInterval    = uint64(600)
-	maxValidatorSize = 5
+	maxValidatorSize = 1
 	safeSize         = maxValidatorSize*2/3 + 1
 	consensusSize    = maxValidatorSize*2/3 + 1
 )
@@ -86,7 +86,6 @@ type Harmony struct {
 	txSigner             types.Signer
 	signFn               SignerFn
 	confirmedBlockHeader *types.Header
-	global               types.GlobalParams
 	mu                   sync.RWMutex
 	stop                 chan bool
 }
@@ -168,10 +167,6 @@ func (h *Harmony) Coinbase(header *types.Header) (common.Address, error) {
 
 func (h *Harmony) Ctx() *Context {
 	return h.ctx
-}
-
-func (h *Harmony) GlobalParams() types.GlobalParams {
-	return h.global
 }
 
 func (h *Harmony) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
@@ -550,10 +545,6 @@ func (h *Harmony) Authorize(signer common.Address, signFn SignerFn) {
 	h.signer = signer
 	h.signFn = signFn
 	h.mu.Unlock()
-}
-
-func (h *Harmony) SetGlobalParams(globalparam types.GlobalParams) {
-	h.global = globalparam
 }
 
 // ecRecover extracts the Ethereum account address from a signed header.

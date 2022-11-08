@@ -170,6 +170,10 @@ func (h *Harmony) Ctx() *Context {
 	return h.ctx
 }
 
+func (h *Harmony) GlobalParams() types.GlobalParams {
+	return h.global
+}
+
 func (h *Harmony) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
 	return h.verifyHeader(chain, header, nil)
 }
@@ -411,10 +415,6 @@ func (h *Harmony) Finalize(
 	// apply vote txs here, these tx is no reason to fail, no err no revert needed
 	h.applyVoteTxs(txs)
 
-	//提案交易-将ID返回 todo:调整位置
-	validators, _ := h.ctx.GetValidators()
-	h.global.ApplyProposals(txs, validators)
-
 	//update mint count trie
 	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
 	if header.EngineInfo, err = h.ctx.Commit(); err != nil {
@@ -550,6 +550,10 @@ func (h *Harmony) Authorize(signer common.Address, signFn SignerFn) {
 	h.signer = signer
 	h.signFn = signFn
 	h.mu.Unlock()
+}
+
+func (h *Harmony) SetGlobalParams(globalparam types.GlobalParams) {
+	h.global = globalparam
 }
 
 // ecRecover extracts the Ethereum account address from a signed header.

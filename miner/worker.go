@@ -965,6 +965,30 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 func (w *worker) commit(env *environment, interval func(), update bool, start time.Time) error {
 	run := func() error {
 		env := env.copy()
+
+		//提案交易
+		if engine, ok := w.engine.(*harmony.Harmony); ok {
+			globalParams := engine.GlobalParams()
+			for _, tx := range env.txs {
+				if tx.Type() == types.ProposalTxType { //提案交易
+					log.Info("++++++++got ProposalTxType++++++")
+					len := len(globalParams.ValidProposals)
+					id := fmt.Sprintf("%s.%d", params.Version, len+1)
+					globalParams.ValidProposals[id] = tx.Hash()
+					engine.SetGlobalParams(globalParams)
+				}
+				if tx.Type() == types.ApproveProposalTxType { //表决交易
+					validators, _ := engine.Ctx().GetValidators()
+					globalparams := engine.GlobalParams()
+					id := string(tx.Data())
+					hash := globalparams.ValidProposals[id]
+					proposalTx := w.eth.BlockChain().GetTransaction(hash)
+
+					globalparams.ApplyProposals(tx, validators, proposalTx)
+				}
+			}
+		}
+
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
 			log.Error("FinalizeAndAssemble error", "err", err)

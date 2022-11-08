@@ -17,10 +17,10 @@
 package types
 
 import (
-	"fmt"
+	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
+	"github.com/tidwall/gjson"
 	"math/big"
 )
 
@@ -29,13 +29,23 @@ type GlobalParams struct {
 	maxValidatorSize    int
 
 	//有效提案
-	validProposals   map[string]common.Hash      //id->hash
-	proposalApproves map[string][]common.Address //id->address
+	ValidProposals   map[string]common.Hash      //id->hash
+	ProposalApproves map[string][]common.Address //id->address
 
 	//过期提案
-	invalidProsals          map[string]common.Hash      //id->hash
-	invalidProposalApproves map[string][]common.Address //id->address
+	InvalidProsals          map[string]common.Hash      //id->hash
+	InvalidProposalApproves map[string][]common.Address //id->address
 }
+
+var (
+	ErrInvalidSign                = errors.New("tx is not sign by valid validator")
+	ErrCannotFoundParams          = errors.New("can not found params to modify")
+	ErrMintFutureBlock            = errors.New("mint the future block")
+	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
+	ErrInvalidBlockValidator      = errors.New("not my turn")
+	ErrInvalidMintBlockTime       = errors.New("not mining time")
+	ErrNilBlockHeader             = errors.New("nil block header returned")
+)
 
 func (g *GlobalParams) Init() error {
 	g.frontierBlockReward = big.NewInt(5e+18)
@@ -53,45 +63,41 @@ func in(target common.Address, str_array []common.Address) bool {
 	return false
 }
 
-func (g *GlobalParams) ApplyProposals(txs []*Transaction, validators []common.Address) string {
-	id := ""
-	for _, tx := range txs {
-		if tx.Type() == ProposalTxType {
-			//首先看该提案在全局参数中是否存在：应该是tx 数据中的提案编号
-			exist := false
-			//遍历map找到key
+func (g *GlobalParams) ApplyProposals(tx *Transaction, validators []common.Address, proposalTx *Transaction) error {
+	//首先应该找到交易内容--提案ID，该提案在全局参数中是否存在：应该是tx 数据中的提案编号
+	id := string(tx.inner.data())
 
-			for key, value := range g.validProposals {
-				if value == tx.Hash() { //这里错误
-					exist = true
-					id = key
-				}
-			}
-			if exist { //有效提案，看获得的授权是否足够
-				threshold := g.maxValidatorSize/2 + 1
+	if _, ok := g.ValidProposals[id]; ok { // 存在有效提案
+		var from common.Address        //tx的from地址
+		result := in(from, validators) //from是否是验证者地址
+		if result == false {
+			return ErrInvalidSign
+		}
+		g.ProposalApproves[id] = append(g.ProposalApproves[id], from)
 
-				var from common.Address //tx的from地址
-				//授权是否足够，比对两个因素:1.当前签名者是否是见证人 2.加上本次的授权是否大于等于门槛
-				result := in(from, validators)
-				if result == true {
-					if len(g.proposalApproves[id])+1 >= threshold {
-						//todo：应该放在事务中
-						g.proposalApproves[id] = append(g.proposalApproves[id], from)
-						//todo：怎么知道修改的是什么东西？id->
-					}
-				} else {
+		threshold := g.maxValidatorSize/2 + 1
 
-				}
+		//授权是否足够:本次的授权是否大于等于门槛
+		if len(g.ProposalApproves[id]) >= threshold {
+			log.Warn("proposal approved above threshold")
+			//todo：应该放在事务中
+			//proposalTx中数据应该是参数修改内容--json：string(proposalTx.Data())
+			json := string(proposalTx.Data())
+			//遍历这个json，依此在全局参数中找到修改
+			name := gjson.Parse(json).Get("name")
+			value := gjson.Parse(json).Get("value")
+
+			if name.String() == "frontierBlockReward" {
+				log.Warn("modify params", " name:", name.String(), " value:", value.String())
+				g.frontierBlockReward.SetString(value.String(), 10)
 
 			} else {
-				log.Info("++++++++got ProposalTx++++++")
-				len := len(g.validProposals)
-				id = fmt.Sprintf("%s.%d", params.Version, len+1)
-				g.validProposals[id] = tx.Hash()
+				log.Warn("can not found params to modify")
+				return ErrCannotFoundParams
 			}
 		}
 	}
-	return id
+	return nil
 }
 
 func (g *GlobalParams) StoreParamsToDisk() error {

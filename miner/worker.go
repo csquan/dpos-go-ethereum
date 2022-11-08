@@ -76,6 +76,8 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
+
+	epochInterval = uint64(600)
 )
 
 var (
@@ -179,12 +181,11 @@ type getWorkReq struct {
 // worker is the main object which takes care of submitting new work to consensus engine
 // and gathering the sealing result.
 type worker struct {
-	config       *Config
-	chainConfig  *params.ChainConfig
-	GlobalParams types.GlobalParams
-	engine       consensus.Engine
-	eth          Backend
-	chain        *core.BlockChain
+	config      *Config
+	chainConfig *params.ChainConfig
+	engine      consensus.Engine
+	eth         Backend
+	chain       *core.BlockChain
 
 	// Feeds
 	pendingLogsFeed event.Feed
@@ -270,7 +271,6 @@ func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus
 	// Subscribe events for blockchain
 	worker.chainHeadSub = eth.BlockChain().SubscribeChainHeadEvent(worker.chainHeadCh)
 
-	worker.GlobalParams.Init() //全局参数初始化
 	// Sanitize recommit interval if the user-specified one is too short.
 	recommit := worker.config.Recommit
 	if recommit < minRecommitInterval {
@@ -983,29 +983,34 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			for _, tx := range env.txs {
 				if tx.Type() == types.ProposalTxType { //提案交易
 					log.Info("++++++++got ProposalTxType++++++")
-					len := len(w.GlobalParams.ValidProposals)
+					len := len(engine.GlobalParams.ValidProposals)
 					id := fmt.Sprintf("%s.%d", params.Version, len)
-					w.GlobalParams.ValidProposals[id] = tx.Hash()
+					engine.GlobalParams.ValidProposals[id] = tx.Hash()
+					engine.GlobalParams.ProposalEpoch[id] = env.header.Time / epochInterval ///当前的epoch
+					engine.GlobalParams.StoreParamsToDisk()
 				}
 				if tx.Type() == types.ApproveProposalTxType { //表决交易
 					validators, _ := engine.Ctx().GetValidators()
 					id := string(tx.Data())
 
-					if hash, ok := w.GlobalParams.ValidProposals[id]; ok { // 存在有效提案
-						proposalTx := w.eth.BlockChain().GetTransaction(hash)
+					if hash, ok := engine.GlobalParams.ValidProposals[id]; ok { // 存在有效提案
+						curEpoch := env.header.Time / epochInterval //查看当前id是否过期
+						if curEpoch <= engine.GlobalParams.ProposalEpoch[id]+2 {
+							proposalTx := w.eth.BlockChain().GetTransaction(hash)
 
-						//找到tx的from地址
-						msg, err := tx.AsMessage(types.MakeSigner(w.chainConfig, env.header.Number), env.header.BaseFee)
-						if err != nil {
-							return err
-						}
+							//找到tx的from地址
+							msg, err := tx.AsMessage(types.MakeSigner(w.chainConfig, env.header.Number), env.header.BaseFee)
+							if err != nil {
+								return err
+							}
 
-						result := in(msg.From(), validators) //交易的from是否是验证者地址
-						if result == false {
-							return errInvalidSign
+							result := in(msg.From(), validators) //交易的from是否是验证者地址
+							if result == false {
+								return errInvalidSign
+							}
+							engine.GlobalParams.ProposalApproves[id] = append(engine.GlobalParams.ProposalApproves[id], msg.From())
+							engine.GlobalParams.ApplyProposals(tx, proposalTx)
 						}
-						w.GlobalParams.ProposalApproves[id] = append(w.GlobalParams.ProposalApproves[id], msg.From())
-						w.GlobalParams.ApplyProposals(tx, proposalTx)
 					}
 				}
 			}

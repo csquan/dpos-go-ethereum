@@ -88,6 +88,7 @@ type Harmony struct {
 	confirmedBlockHeader *types.Header
 	mu                   sync.RWMutex
 	stop                 chan bool
+	GlobalParams         types.GlobalParams
 }
 
 func (h *Harmony) FinalizeAndAssemble(
@@ -148,13 +149,15 @@ func sigHash(header *types.Header) (hash common.Hash) {
 func New(config *params.ChainConfig, engineDB ethdb.Database) *Harmony {
 	signatures, _ := lru.NewARC(inMemorySignatures)
 	ctx, _ := NewEmptyContext(engineDB)
-	return &Harmony{
-		config:     config.Harmony,
-		db:         engineDB,
-		ctx:        ctx,
-		txSigner:   types.LatestSigner(config),
-		signatures: signatures,
-	}
+
+	var h Harmony
+	h.config = config.Harmony
+	h.db = engineDB
+	h.ctx = ctx
+	h.txSigner = types.LatestSigner(config)
+	h.signatures = signatures
+	h.GlobalParams.Init()
+	return &h
 }
 
 func (h *Harmony) Author(header *types.Header) (common.Address, error) {
@@ -402,6 +405,7 @@ func (h *Harmony) Finalize(
 		}
 	}
 	genesis := chain.GetHeaderByNumber(0)
+
 	err := epochContext.tryElect(genesis, parent)
 	if err != nil {
 		log.Error("got error when elect next epoch,", "err", err)

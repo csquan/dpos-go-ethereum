@@ -17,11 +17,13 @@
 package types
 
 import (
+	"encoding/json"
 	"errors"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/tidwall/gjson"
 	"math/big"
+	"os"
 )
 
 type GlobalParams struct {
@@ -35,6 +37,9 @@ type GlobalParams struct {
 	//过期提案
 	InvalidProsals          map[string]common.Hash      //id->hash
 	InvalidProposalApproves map[string][]common.Address //id->address
+
+	//记录每个提案对应的epochID
+	ProposalEpoch map[string]uint64 //id->epoch
 }
 
 var (
@@ -47,16 +52,25 @@ var (
 )
 
 func (g *GlobalParams) Init() error {
-	g.frontierBlockReward = big.NewInt(5e+18)
-	g.maxValidatorSize = 1
+	//ReadParamsFromDisk
+	err := g.ReadParamsFromDisk()
+	if err != nil { //没找到文件，说明是第一次启动
+		log.Info("..............init globalParams .............")
+		g.frontierBlockReward = big.NewInt(5e+18)
+		g.maxValidatorSize = 1
 
-	//有效提案
-	g.ValidProposals = make(map[string]common.Hash)        //id->hash
-	g.ProposalApproves = make(map[string][]common.Address) //id->address
+		//有效提案
+		g.ValidProposals = make(map[string]common.Hash)        //id->hash
+		g.ProposalApproves = make(map[string][]common.Address) //id->address
 
-	//过期提案
-	g.InvalidProsals = make(map[string]common.Hash)               //id->hash
-	g.InvalidProposalApproves = make(map[string][]common.Address) //id->address
+		//过期提案
+		g.InvalidProsals = make(map[string]common.Hash)               //id->hash
+		g.InvalidProposalApproves = make(map[string][]common.Address) //id->address
+		g.ProposalEpoch = make(map[string]uint64)                     //id->epoch
+
+	} else {
+		log.Info("..............read globalParams .............")
+	}
 
 	log.Info("..............set globalParams success.............")
 	return nil
@@ -90,7 +104,6 @@ func (g *GlobalParams) ApplyProposals(tx *Transaction, proposalTx *Transaction) 
 		if name.String() == "frontierBlockReward" {
 			log.Warn("modify params", " name:", name.String(), " value:", value.String())
 			g.frontierBlockReward.SetString(value.String(), 10)
-
 		} else {
 			log.Warn("can not found params to modify")
 			return ErrCannotFoundParams
@@ -100,6 +113,19 @@ func (g *GlobalParams) ApplyProposals(tx *Transaction, proposalTx *Transaction) 
 }
 
 func (g *GlobalParams) StoreParamsToDisk() error {
+	file, err := os.OpenFile("./globalParams.txt", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	if err != nil {
+		return err
+	}
+	//defer file.Close()
+	//g===>[]byte
+	data, err := json.Marshal(g)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write([]byte(data)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -108,5 +134,21 @@ func (g *GlobalParams) GetProposalID(hash common.Hash) error {
 }
 
 func (g *GlobalParams) ReadParamsFromDisk() error {
+	file, err := os.Open("./globalParams.txt")
+	if err != nil {
+		return err
+	}
+	//defer file.Close()
+	//g===>[]byte
+	var data []byte
+	if _, err := file.Read(data); err != nil {
+		return err
+	}
+	var gp GlobalParams
+	err = json.Unmarshal(data, gp)
+	if err != nil {
+		return err
+	}
+	g = &gp
 	return nil
 }

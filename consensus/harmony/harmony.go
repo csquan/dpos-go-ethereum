@@ -3,7 +3,9 @@ package harmony
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"sync"
 	"time"
@@ -378,11 +380,8 @@ func (h *Harmony) Prepare(chain consensus.ChainHeaderReader, header *types.Heade
 	return nil
 }
 
-func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, rewards *big.Int) {
 	// Select the correct block reward based on chain progression
-	// 奖励应该从state中取
-	obj := state.GetStateParamsObject(globalParams)
-	rewards := obj.BlockRewards()
 	state.AddBalance(header.Coinbase, rewards)
 }
 
@@ -393,8 +392,17 @@ func (h *Harmony) Finalize(
 	txs []*types.Transaction,
 	uncles []*types.Header,
 ) {
+	s := types.GlobalParams{}
+	g := rawdb.ReadParams(h.db)
+
+	err := json.Unmarshal(g, &s)
+	if err != nil {
+		log.Error("Unmarshal,", "err", err)
+	}
+	log.Info("get ", "globalParams", s)
+
 	// Accumulate block rewards and commit the final state root
-	AccumulateRewards(chain.Config(), state, header, uncles)
+	AccumulateRewards(chain.Config(), state, header, uncles, s.FrontierBlockReward)
 
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
@@ -408,7 +416,7 @@ func (h *Harmony) Finalize(
 		}
 	}
 	genesis := chain.GetHeaderByNumber(0)
-	err := epochContext.tryElect(genesis, parent)
+	err = epochContext.tryElect(genesis, parent)
 	if err != nil {
 		log.Error("got error when elect next epoch,", "err", err)
 	}

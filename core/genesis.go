@@ -44,7 +44,7 @@ import (
 //go:generate go run github.com/fjl/gencodec -type GenesisAccount -field-override genesisAccountMarshaling -out gen_genesis_account.go
 
 var errGenesisNoConfig = errors.New("genesis has no chain configuration")
-var globalParams = "hui chan global params"
+var globalParamsKey = []byte("hui chan global params")
 
 // Genesis specifies the header fields, state of a genesis block. It also defines hard
 // fork switch-over blocks through the chain configuration.
@@ -119,8 +119,6 @@ func (ga *GenesisAlloc) flush(db ethdb.Database) error {
 			statedb.SetState(addr, key, value)
 		}
 	}
-	statedb.CreateParamsStore([]byte(globalParams))
-
 	root, err := statedb.Commit(false)
 	if err != nil {
 		return err
@@ -246,6 +244,7 @@ func SetupGenesisBlock(db ethdb.Database, genesis *Genesis) (*params.ChainConfig
 }
 
 func SetupGenesisBlockWithOverride(db ethdb.Database, genesis *Genesis, overrideTerminalTotalDifficulty *big.Int, overrideTerminalTotalDifficultyPassed *bool) (*params.ChainConfig, common.Hash, error) {
+
 	if genesis != nil && genesis.Config == nil {
 		return params.AllEthashProtocolChanges, common.Hash{}, errGenesisNoConfig
 	}
@@ -417,6 +416,15 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	if err := g.Alloc.flush(db); err != nil {
 		return nil, err
 	}
+
+	var gp types.GlobalParams
+	gp.InitParams()
+	data, err := json.Marshal(&gp)
+	if err != nil {
+		return nil, errors.New("can't Marshal GlobalParams")
+	}
+	rawdb.WriteParams(db, globalParamsKey, data)
+
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)

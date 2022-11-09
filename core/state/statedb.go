@@ -41,13 +41,8 @@ type revision struct {
 }
 
 var (
-	frontierBlockReward = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-)
-
-var (
 	// emptyRoot is the known root hash of an empty trie.
-	emptyRoot    = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
-	globalParams = "hui chan global params"
+	emptyRoot = common.HexToHash("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 )
 
 type proofList [][]byte
@@ -86,11 +81,6 @@ type StateDB struct {
 	stateObjects        map[common.Address]*stateObject
 	stateObjectsPending map[common.Address]struct{} // State objects finalized but not yet written to the trie
 	stateObjectsDirty   map[common.Address]struct{} // State objects modified in the current execution
-
-	// This map holds 'live' objects, which will get modified while processing a state transition.
-	stateParamsObjects        map[string]*stateParamsObject
-	stateParamsObjectsPending map[string]struct{} // State objects finalized but not yet written to the trie
-	stateParamsObjectsDirty   map[string]struct{} // State objects modified in the current execution
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -144,16 +134,13 @@ func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) 
 		return nil, err
 	}
 	sdb := &StateDB{
-		db:                        db,
-		trie:                      tr,
-		originalRoot:              root,
-		snaps:                     snaps,
-		stateObjects:              make(map[common.Address]*stateObject),
-		stateObjectsPending:       make(map[common.Address]struct{}),
-		stateObjectsDirty:         make(map[common.Address]struct{}),
-		stateParamsObjects:        make(map[string]*stateParamsObject),
-		stateParamsObjectsPending: make(map[string]struct{}),
-		stateParamsObjectsDirty:   make(map[string]struct{}),
+		db:                  db,
+		trie:                tr,
+		originalRoot:        root,
+		snaps:               snaps,
+		stateObjects:        make(map[common.Address]*stateObject),
+		stateObjectsPending: make(map[common.Address]struct{}),
+		stateObjectsDirty:   make(map[common.Address]struct{}),
 
 		logs:       make(map[common.Hash][]*types.Log),
 		preimages:  make(map[common.Hash][]byte),
@@ -513,16 +500,6 @@ func (s *StateDB) getStateObject(addr common.Address) *stateObject {
 	return nil
 }
 
-// getStateObject retrieves a state object given by the address, returning nil if
-// the object is not found or was deleted in this execution context. If you need
-// to differentiate between non-existent/just-deleted, use getDeletedStateObject.
-func (s *StateDB) GetStateParamsObject(name string) *stateParamsObject {
-	if obj := s.stateParamsObjects[name]; obj != nil {
-		return obj
-	}
-	return nil
-}
-
 // getDeletedStateObject is similar to getStateObject, but instead of returning
 // nil for a deleted state object, it returns the actual object with the deleted
 // flag set. This is needed by the state journal to revert to the correct s-
@@ -584,10 +561,6 @@ func (s *StateDB) setStateObject(object *stateObject) {
 	s.stateObjects[object.Address()] = object
 }
 
-func (s *StateDB) setStateParamsObject(object *stateParamsObject) {
-	s.stateParamsObjects[string(object.name)] = object
-}
-
 // GetOrNewStateObject retrieves a state object or create a new state object if nil.
 func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 	stateObject := s.getStateObject(addr)
@@ -622,14 +595,6 @@ func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) 
 	return newobj, nil
 }
 
-// createObject creates a new state object. If there is an existing account with
-// the given address, it is overwritten and returned as the second return value.
-func (s *StateDB) createParamsObject(name []byte) (newobj *stateParamsObject) {
-	newobj = newParamsObject(s, name, types.StateParams{})
-	s.setStateParamsObject(newobj)
-	return newobj
-}
-
 // CreateAccount explicitly creates a state object. If a state object with the address
 // already exists the balance is carried over to the new account.
 //
@@ -645,12 +610,6 @@ func (s *StateDB) CreateAccount(addr common.Address) {
 	if prev != nil {
 		newObj.setBalance(prev.data.Balance)
 	}
-}
-
-// 创世调用:创建一个参数存储state
-func (s *StateDB) CreateParamsStore(name []byte) {
-	newObj := s.createParamsObject(name)
-	newObj.setBalance(frontierBlockReward)
 }
 
 func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common.Hash) bool) error {
@@ -687,21 +646,18 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
-		db:                        s.db,
-		trie:                      s.db.CopyTrie(s.trie),
-		originalRoot:              s.originalRoot,
-		stateObjects:              make(map[common.Address]*stateObject, len(s.journal.dirties)),
-		stateObjectsPending:       make(map[common.Address]struct{}, len(s.stateObjectsPending)),
-		stateObjectsDirty:         make(map[common.Address]struct{}, len(s.journal.dirties)),
-		stateParamsObjects:        make(map[string]*stateParamsObject, 1),
-		stateParamsObjectsPending: make(map[string]struct{}, 1),
-		stateParamsObjectsDirty:   make(map[string]struct{}, 1),
-		refund:                    s.refund,
-		logs:                      make(map[common.Hash][]*types.Log, len(s.logs)),
-		logSize:                   s.logSize,
-		preimages:                 make(map[common.Hash][]byte, len(s.preimages)),
-		journal:                   newJournal(),
-		hasher:                    crypto.NewKeccakState(),
+		db:                  s.db,
+		trie:                s.db.CopyTrie(s.trie),
+		originalRoot:        s.originalRoot,
+		stateObjects:        make(map[common.Address]*stateObject, len(s.journal.dirties)),
+		stateObjectsPending: make(map[common.Address]struct{}, len(s.stateObjectsPending)),
+		stateObjectsDirty:   make(map[common.Address]struct{}, len(s.journal.dirties)),
+		refund:              s.refund,
+		logs:                make(map[common.Hash][]*types.Log, len(s.logs)),
+		logSize:             s.logSize,
+		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
+		journal:             newJournal(),
+		hasher:              crypto.NewKeccakState(),
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -734,17 +690,6 @@ func (s *StateDB) Copy() *StateDB {
 			state.stateObjects[addr] = s.stateObjects[addr].deepCopy(state)
 		}
 		state.stateObjectsDirty[addr] = struct{}{}
-	}
-
-	//read params from last state
-	if object, exist := s.stateParamsObjects[globalParams]; exist {
-		// Even though the original object is dirty, we are not copying the journal,
-		// so we need to make sure that anyside effect the journal would have caused
-		// during a commit (or similar op) is already applied to the copy.
-		state.stateParamsObjects[globalParams] = object.deepCopy(state)
-
-		state.stateParamsObjectsDirty[globalParams] = struct{}{}   // Mark the copy dirty to force internal (code/state) commits
-		state.stateParamsObjectsPending[globalParams] = struct{}{} // Mark the copy pending to force external (account) commits
 	}
 
 	for hash, logs := range s.logs {
@@ -991,23 +936,6 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 	if len(s.stateObjectsDirty) > 0 {
 		s.stateObjectsDirty = make(map[common.Address]struct{})
 	}
-	// store params into db
-	obj := s.stateParamsObjects[globalParams]
-	if obj != nil && !obj.deleted {
-		// Write any storage changes in the state object to its storage trie
-		set, err := obj.CommitTrie(s.db)
-		if err != nil {
-			return common.Hash{}, err
-		}
-		// Merge the dirty nodes of storage trie into global set
-		if set != nil {
-			if err := nodes.Merge(set); err != nil {
-				return common.Hash{}, err
-			}
-			storageTrieNodes += set.Len()
-		}
-	}
-
 	if codeWriter.ValueSize() > 0 {
 		if err := codeWriter.Write(); err != nil {
 			log.Crit("Failed to commit dirty codes", "error", err)

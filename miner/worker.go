@@ -83,6 +83,8 @@ var (
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 )
 
+var globalParams = "hui chan global params"
+
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
 type environment struct {
@@ -965,6 +967,7 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 func (w *worker) commit(env *environment, interval func(), update bool, start time.Time) error {
 	run := func() error {
 		env := env.copy()
+
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
 			log.Error("FinalizeAndAssemble error", "err", err)

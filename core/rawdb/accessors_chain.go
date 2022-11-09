@@ -168,9 +168,20 @@ func DeleteHeaderNumber(db ethdb.KeyValueWriter, hash common.Hash) {
 	}
 }
 
+func WriteParams(db ethdb.KeyValueWriter, key []byte, value []byte) error {
+	err := db.Put(key, value)
+	return err
+}
+
+func ReadParams(db ethdb.KeyValueReader) []byte {
+	data, _ := db.Get(globalParams)
+	return data
+}
+
 // ReadHeadHeaderHash retrieves the hash of the current canonical head header.
 func ReadHeadHeaderHash(db ethdb.KeyValueReader) common.Hash {
 	data, _ := db.Get(headHeaderKey)
+
 	if len(data) == 0 {
 		return common.Hash{}
 	}

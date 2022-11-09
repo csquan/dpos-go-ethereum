@@ -378,11 +378,11 @@ func (h *Harmony) Prepare(chain consensus.ChainHeaderReader, header *types.Heade
 	return nil
 }
 
-func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, rewards uint64) {
+func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, rewards *big.Int) {
 	// Select the correct block reward based on chain progression
 	var blockRewards big.Int
-	if rewards > 0 {
-		blockRewards.SetUint64(rewards)
+	if rewards.Uint64() > 0 {
+		blockRewards = *rewards
 	} else {
 		blockRewards = *frontierBlockReward
 	}

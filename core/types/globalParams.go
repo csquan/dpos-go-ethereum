@@ -35,6 +35,8 @@ type GlobalParams struct {
 	ValidProposals   map[string]common.Hash      //id->hash
 	ProposalApproves map[string][]common.Address //id->address
 
+	HashMap map[common.Hash]uint8 //hash-uint8 hash map 用途是为了快速确定hash是否被处理过
+
 	//记录每个提案对应的epochID
 	ProposalEpoch map[string]uint64 //id->epoch
 }
@@ -61,6 +63,8 @@ func (g *GlobalParams) Init() error {
 		g.ProposalApproves = make(map[string][]common.Address) //id->address
 
 		g.ProposalEpoch = make(map[string]uint64) //id->epoch
+
+		g.HashMap = make(map[common.Hash]uint8)
 
 	} else {
 		log.Info("..............read globalParams .............")
@@ -127,8 +131,8 @@ func (g *GlobalParams) GetProposalValidEpochCnt() uint64 {
 	return g.proposalValidEpochCnt
 }
 
-func (g *GlobalParams) GetRewards() uint64 {
-	return g.proposalValidEpochCnt
+func (g *GlobalParams) GetRewards() *big.Int {
+	return g.frontierBlockReward
 }
 
 func (g *GlobalParams) GetProposalID(hash common.Hash) error {

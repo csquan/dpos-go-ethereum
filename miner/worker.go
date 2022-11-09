@@ -974,10 +974,15 @@ func applyProposalTx(w *worker, env *environment) error {
 	if engine, ok := w.engine.(*harmony.Harmony); ok {
 		for _, tx := range env.txs {
 			if tx.Type() == types.ProposalTxType { //提案交易
-				log.Info("++++++++got ProposalTxType++++++")
+				if engine.GlobalParams.HashMap[tx.Hash()] == 1 { //说明交易本次已经处理过，是二次广播来的交易
+					return nil
+				}
+				log.Info("got ProposalTxType")
 				len := len(engine.GlobalParams.ValidProposals)
 				id := fmt.Sprintf("%s.%d", params.Version, len)
 				engine.GlobalParams.ValidProposals[id] = tx.Hash()
+				engine.GlobalParams.HashMap[tx.Hash()] = 1 //表示已经被处理，这里要提出第二次广播又进来的交易
+
 				engine.GlobalParams.ProposalEpoch[id] = env.header.Time / epochInterval ///当前的epoch
 				engine.GlobalParams.StoreParamsToDisk()
 			}
@@ -1009,6 +1014,7 @@ func applyProposalTx(w *worker, env *environment) error {
 			}
 		}
 	}
+	return nil
 }
 
 // commit runs any post-transaction state modifications, assembles the final block

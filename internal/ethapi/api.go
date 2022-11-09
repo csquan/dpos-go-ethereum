@@ -1690,6 +1690,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	} else {
 		log.Info("Submitted transaction", "hash", tx.Hash().Hex(), "from", from, "nonce", tx.Nonce(), "recipient", tx.To(), "value", tx.Value())
 	}
+	//这里，如果交易类型是提案交易，那么返回一个
 	return tx.Hash(), nil
 }
 

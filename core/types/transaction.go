@@ -214,6 +214,14 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner VoteTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case ProposalTxType:
+		var inner ProposalTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case ApproveProposalTxType:
+		var inner ProposalTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}

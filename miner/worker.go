@@ -987,6 +987,7 @@ func getParams(engine *harmony.Harmony) (types.GlobalParams, error) {
 	return globalParams, err
 
 }
+
 func applyProposalTx(w *worker, env *environment) error {
 	if engine, ok := w.engine.(*harmony.Harmony); ok {
 		for _, tx := range env.txs {

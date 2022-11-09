@@ -46,8 +46,6 @@ var (
 	timeOfFirstBlock = uint64(0)
 
 	confirmedBlockHead = []byte("confirmed-block-head")
-
-	globalParams = "hui chan global params"
 )
 
 var (
@@ -385,6 +383,9 @@ func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header 
 	state.AddBalance(header.Coinbase, rewards)
 }
 
+func (h *Harmony) GetDB() ethdb.Database {
+	return h.db
+}
 func (h *Harmony) Finalize(
 	chain consensus.ChainHeaderReader,
 	header *types.Header,

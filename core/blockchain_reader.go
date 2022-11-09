@@ -266,6 +266,16 @@ func (bc *BlockChain) GetTransactionLookup(hash common.Hash) *rawdb.LegacyTxLook
 	return lookup
 }
 
+// GetTransactionLookup retrieves the lookup associate with the given transaction
+// hash from the cache or database.
+func (bc *BlockChain) GetTransaction(hash common.Hash) *types.Transaction {
+	tx, _, _, _ := rawdb.ReadTransaction(bc.db, hash)
+	if tx == nil {
+		return nil
+	}
+	return tx
+}
+
 // GetTd retrieves a block's total difficulty in the canonical chain from the
 // database by hash and number, caching it if found.
 func (bc *BlockChain) GetTd(hash common.Hash, number uint64) *big.Int {

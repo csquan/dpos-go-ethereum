@@ -992,7 +992,7 @@ func applyProposalTx(w *worker, env *environment) error {
 
 				if hash, ok := engine.GlobalParams.ValidProposals[id]; ok { // 存在有效提案
 					curEpoch := env.header.Time / epochInterval //查看当前id是否过期
-					validCnt := engine.GlobalParams.GetProposalValidEpochCnt()
+					validCnt := engine.GlobalParams.ProposalValidEpochCnt
 
 					if curEpoch <= engine.GlobalParams.ProposalEpoch[id]+validCnt {
 						proposalTx := w.eth.BlockChain().GetTransaction(hash)

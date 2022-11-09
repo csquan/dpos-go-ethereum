@@ -397,7 +397,7 @@ func (h *Harmony) Finalize(
 	uncles []*types.Header,
 ) {
 	// Accumulate block rewards and commit the final state root
-	AccumulateRewards(chain.Config(), state, header, uncles, h.GlobalParams.GetRewards())
+	AccumulateRewards(chain.Config(), state, header, uncles, h.GlobalParams.FrontierBlockReward)
 
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{

@@ -22,14 +22,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/tidwall/gjson"
+	"io/ioutil"
 	"math/big"
 	"os"
 )
 
 type GlobalParams struct {
-	frontierBlockReward   *big.Int //出块奖励
-	maxValidatorSize      int      //见证人数量--目前没找到在哪里生效
-	proposalValidEpochCnt uint64   //提案有效期
+	FrontierBlockReward   *big.Int //出块奖励
+	MaxValidatorSize      int      //见证人数量--目前没找到在哪里生效
+	ProposalValidEpochCnt uint64   //提案有效期
 
 	//有效提案
 	ValidProposals   map[string]common.Hash      //id->hash
@@ -50,22 +51,24 @@ var (
 	ErrNilBlockHeader             = errors.New("nil block header returned")
 )
 
+func (g *GlobalParams) initParams() {
+	g.FrontierBlockReward = big.NewInt(5e+18)
+	g.MaxValidatorSize = 1
+	g.ProposalValidEpochCnt = 2
+
+	g.ValidProposals = make(map[string]common.Hash)        //id->hash
+	g.ProposalApproves = make(map[string][]common.Address) //id->address
+
+	g.ProposalEpoch = make(map[string]uint64) //id->epoch
+
+	g.HashMap = make(map[common.Hash]uint8)
+}
 func (g *GlobalParams) Init() error {
 	//ReadParamsFromDisk
 	err := g.ReadParamsFromDisk()
 	if err != nil { //没找到文件，说明是第一次启动
 		log.Info("..............init globalParams .............")
-		g.frontierBlockReward = big.NewInt(5e+18)
-		g.maxValidatorSize = 1
-		g.proposalValidEpochCnt = 2
-
-		g.ValidProposals = make(map[string]common.Hash)        //id->hash
-		g.ProposalApproves = make(map[string][]common.Address) //id->address
-
-		g.ProposalEpoch = make(map[string]uint64) //id->epoch
-
-		g.HashMap = make(map[common.Hash]uint8)
-
+		g.initParams()
 	} else {
 		log.Info("..............read globalParams .............")
 	}
@@ -87,7 +90,7 @@ func (g *GlobalParams) ApplyProposals(tx *Transaction, proposalTx *Transaction) 
 	//首先应该找到交易内容--提案ID，该提案在全局参数中是否存在：应该是tx 数据中的提案编号
 	id := string(tx.inner.data())
 
-	threshold := g.maxValidatorSize/2 + 1
+	threshold := g.MaxValidatorSize/2 + 1
 
 	//授权是否足够:本次的授权是否大于等于门槛
 	if len(g.ProposalApproves[id]) >= threshold {
@@ -101,7 +104,7 @@ func (g *GlobalParams) ApplyProposals(tx *Transaction, proposalTx *Transaction) 
 
 		if name.String() == "frontierBlockReward" {
 			log.Warn("modify params", " name:", name.String(), " value:", value.String())
-			g.frontierBlockReward.SetString(value.String(), 10)
+			g.FrontierBlockReward.SetString(value.String(), 10)
 		} else {
 			log.Warn("can not found params to modify")
 			return ErrCannotFoundParams
@@ -116,42 +119,30 @@ func (g *GlobalParams) StoreParamsToDisk() error {
 		return err
 	}
 	defer file.Close()
-	//g===>[]byte
-	data, err := json.Marshal(g)
+	data, err := json.Marshal(&g)
 	if err != nil {
 		return err
 	}
-	if _, err := file.Write([]byte(data)); err != nil {
+	if _, err := file.Write(data); err != nil {
 		return err
 	}
-	return nil
-}
-
-func (g *GlobalParams) GetProposalValidEpochCnt() uint64 {
-	return g.proposalValidEpochCnt
-}
-
-func (g *GlobalParams) GetRewards() *big.Int {
-	return g.frontierBlockReward
-}
-
-func (g *GlobalParams) GetProposalID(hash common.Hash) error {
 	return nil
 }
 
 func (g *GlobalParams) ReadParamsFromDisk() error {
-	file, err := os.Open("./globalParams.txt")
+	file, err := os.Open("./globalParams")
 	if err != nil {
 		return err
 	}
-	//defer file.Close()
+	defer file.Close()
 	//g===>[]byte
-	var data []byte
-	if _, err := file.Read(data); err != nil {
-		return err
-	}
+	content, err := ioutil.ReadAll(file)
+
+	str := string(content)
+
 	var gp GlobalParams
-	err = json.Unmarshal(data, gp)
+	gp.initParams()
+	err = json.Unmarshal([]byte(str), gp)
 	if err != nil {
 		return err
 	}

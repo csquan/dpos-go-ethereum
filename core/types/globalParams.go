@@ -27,16 +27,13 @@ import (
 )
 
 type GlobalParams struct {
-	frontierBlockReward *big.Int
-	maxValidatorSize    int
+	frontierBlockReward   *big.Int //出块奖励
+	maxValidatorSize      int      //见证人数量--目前没找到在哪里生效
+	proposalValidEpochCnt uint64   //提案有效期
 
 	//有效提案
 	ValidProposals   map[string]common.Hash      //id->hash
 	ProposalApproves map[string][]common.Address //id->address
-
-	//过期提案
-	InvalidProsals          map[string]common.Hash      //id->hash
-	InvalidProposalApproves map[string][]common.Address //id->address
 
 	//记录每个提案对应的epochID
 	ProposalEpoch map[string]uint64 //id->epoch
@@ -58,15 +55,12 @@ func (g *GlobalParams) Init() error {
 		log.Info("..............init globalParams .............")
 		g.frontierBlockReward = big.NewInt(5e+18)
 		g.maxValidatorSize = 1
+		g.proposalValidEpochCnt = 2
 
-		//有效提案
 		g.ValidProposals = make(map[string]common.Hash)        //id->hash
 		g.ProposalApproves = make(map[string][]common.Address) //id->address
 
-		//过期提案
-		g.InvalidProsals = make(map[string]common.Hash)               //id->hash
-		g.InvalidProposalApproves = make(map[string][]common.Address) //id->address
-		g.ProposalEpoch = make(map[string]uint64)                     //id->epoch
+		g.ProposalEpoch = make(map[string]uint64) //id->epoch
 
 	} else {
 		log.Info("..............read globalParams .............")
@@ -113,11 +107,11 @@ func (g *GlobalParams) ApplyProposals(tx *Transaction, proposalTx *Transaction) 
 }
 
 func (g *GlobalParams) StoreParamsToDisk() error {
-	file, err := os.OpenFile("./globalParams.txt", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	file, err := os.OpenFile("./globalParams", os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
 	if err != nil {
 		return err
 	}
-	//defer file.Close()
+	defer file.Close()
 	//g===>[]byte
 	data, err := json.Marshal(g)
 	if err != nil {
@@ -127,6 +121,14 @@ func (g *GlobalParams) StoreParamsToDisk() error {
 		return err
 	}
 	return nil
+}
+
+func (g *GlobalParams) GetProposalValidEpochCnt() uint64 {
+	return g.proposalValidEpochCnt
+}
+
+func (g *GlobalParams) GetRewards() uint64 {
+	return g.proposalValidEpochCnt
 }
 
 func (g *GlobalParams) GetProposalID(hash common.Hash) error {

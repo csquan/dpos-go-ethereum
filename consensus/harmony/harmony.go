@@ -378,9 +378,15 @@ func (h *Harmony) Prepare(chain consensus.ChainHeaderReader, header *types.Heade
 	return nil
 }
 
-func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, rewards uint64) {
 	// Select the correct block reward based on chain progression
-	state.AddBalance(header.Coinbase, frontierBlockReward)
+	var blockRewards big.Int
+	if rewards > 0 {
+		blockRewards.SetUint64(rewards)
+	} else {
+		blockRewards = *frontierBlockReward
+	}
+	state.AddBalance(header.Coinbase, &blockRewards)
 }
 
 func (h *Harmony) Finalize(
@@ -391,7 +397,7 @@ func (h *Harmony) Finalize(
 	uncles []*types.Header,
 ) {
 	// Accumulate block rewards and commit the final state root
-	AccumulateRewards(chain.Config(), state, header, uncles)
+	AccumulateRewards(chain.Config(), state, header, uncles, h.GlobalParams.GetRewards())
 
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{

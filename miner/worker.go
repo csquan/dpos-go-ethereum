@@ -970,6 +970,47 @@ func in(target common.Address, str_array []common.Address) bool {
 	return false
 }
 
+func applyProposalTx(w *worker, env *environment) error {
+	if engine, ok := w.engine.(*harmony.Harmony); ok {
+		for _, tx := range env.txs {
+			if tx.Type() == types.ProposalTxType { //提案交易
+				log.Info("++++++++got ProposalTxType++++++")
+				len := len(engine.GlobalParams.ValidProposals)
+				id := fmt.Sprintf("%s.%d", params.Version, len)
+				engine.GlobalParams.ValidProposals[id] = tx.Hash()
+				engine.GlobalParams.ProposalEpoch[id] = env.header.Time / epochInterval ///当前的epoch
+				engine.GlobalParams.StoreParamsToDisk()
+			}
+			if tx.Type() == types.ApproveProposalTxType { //表决交易
+				validators, _ := engine.Ctx().GetValidators()
+				id := string(tx.Data())
+
+				if hash, ok := engine.GlobalParams.ValidProposals[id]; ok { // 存在有效提案
+					curEpoch := env.header.Time / epochInterval //查看当前id是否过期
+					validCnt := engine.GlobalParams.GetProposalValidEpochCnt()
+
+					if curEpoch <= engine.GlobalParams.ProposalEpoch[id]+validCnt {
+						proposalTx := w.eth.BlockChain().GetTransaction(hash)
+
+						//找到tx的from地址
+						msg, err := tx.AsMessage(types.MakeSigner(w.chainConfig, env.header.Number), env.header.BaseFee)
+						if err != nil {
+							return err
+						}
+
+						result := in(msg.From(), validators) //交易的from是否是验证者地址
+						if result == false {
+							return errInvalidSign
+						}
+						engine.GlobalParams.ProposalApproves[id] = append(engine.GlobalParams.ProposalApproves[id], msg.From())
+						engine.GlobalParams.ApplyProposals(tx, proposalTx)
+					}
+				}
+			}
+		}
+	}
+}
+
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 // Note the assumption is held that the mutation is allowed to the passed env, do
@@ -978,42 +1019,11 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 	run := func() error {
 		env := env.copy()
 
-		//提案交易
-		if engine, ok := w.engine.(*harmony.Harmony); ok {
-			for _, tx := range env.txs {
-				if tx.Type() == types.ProposalTxType { //提案交易
-					log.Info("++++++++got ProposalTxType++++++")
-					len := len(engine.GlobalParams.ValidProposals)
-					id := fmt.Sprintf("%s.%d", params.Version, len)
-					engine.GlobalParams.ValidProposals[id] = tx.Hash()
-					engine.GlobalParams.ProposalEpoch[id] = env.header.Time / epochInterval ///当前的epoch
-					engine.GlobalParams.StoreParamsToDisk()
-				}
-				if tx.Type() == types.ApproveProposalTxType { //表决交易
-					validators, _ := engine.Ctx().GetValidators()
-					id := string(tx.Data())
+		err := applyProposalTx(w, env) //提案交易
 
-					if hash, ok := engine.GlobalParams.ValidProposals[id]; ok { // 存在有效提案
-						curEpoch := env.header.Time / epochInterval //查看当前id是否过期
-						if curEpoch <= engine.GlobalParams.ProposalEpoch[id]+2 {
-							proposalTx := w.eth.BlockChain().GetTransaction(hash)
-
-							//找到tx的from地址
-							msg, err := tx.AsMessage(types.MakeSigner(w.chainConfig, env.header.Number), env.header.BaseFee)
-							if err != nil {
-								return err
-							}
-
-							result := in(msg.From(), validators) //交易的from是否是验证者地址
-							if result == false {
-								return errInvalidSign
-							}
-							engine.GlobalParams.ProposalApproves[id] = append(engine.GlobalParams.ProposalApproves[id], msg.From())
-							engine.GlobalParams.ApplyProposals(tx, proposalTx)
-						}
-					}
-				}
-			}
+		if err != nil {
+			log.Error("applyProposalTx error", "err", err)
+			return err
 		}
 
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)

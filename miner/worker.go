@@ -84,6 +84,7 @@ const (
 
 var (
 	errInvalidSign                = errors.New("tx is not sign by valid validator")
+	errMarshalError               = errors.New("marshal error")
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 )
@@ -1009,7 +1010,7 @@ func applyProposalTx(w *worker, env *environment) error {
 
 				data, err := json.Marshal(globalParams)
 				if err != nil {
-
+					return errMarshalError
 				}
 				//写回rawdb
 				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
@@ -1045,6 +1046,11 @@ func applyProposalTx(w *worker, env *environment) error {
 						globalParams.ApplyProposals(tx, proposalTx)
 					}
 				}
+				data, err := json.Marshal(globalParams)
+				if err != nil {
+					return errMarshalError
+				}
+
 				//写回rawdb
 				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
 			}

@@ -1763,6 +1763,23 @@ func (s *TransactionAPI) GetGlobalParams(ctx context.Context) error {
 	return nil
 }
 
+func (s *TransactionAPI) GetPrposalID(ctx context.Context, hash common.Hash) string {
+	// Set some sanity defaults and terminate on failure
+	gp := types.GlobalParams{}
+	g := rawdb.ReadParams(s.b.ChainDb())
+
+	if g == nil {
+		gp.InitParams()
+	} else {
+		err := json.Unmarshal(g, &gp)
+		if err != nil {
+			log.Error("Unmarshal,", "err", err)
+		}
+		log.Info("get ", "globalParams", gp)
+	}
+	return gp.HashMap[hash]
+}
+
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (s *TransactionAPI) SendRawTransaction(ctx context.Context, input hexutil.Bytes) (common.Hash, error) {

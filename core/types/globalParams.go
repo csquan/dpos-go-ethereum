@@ -33,7 +33,7 @@ type GlobalParams struct {
 	ValidProposals   map[string]common.Hash      "json:validProposals"   //id->hash
 	ProposalApproves map[string][]common.Address "json:proposalApproves" //id->address
 
-	HashMap map[common.Hash]uint8 "json:hashMap" //hash-uint8 hash map 用途是为了快速确定hash是否被处理过
+	HashMap map[common.Hash]string "json:hashMap" //hash-uint8 hash map 用途是为了1。快速确定hash是否被处理过 2。快速从hash找到ID
 
 	//记录每个提案对应的epochID
 	ProposalEpoch map[string]uint64 "json:proposalEpoch" //id->epoch
@@ -51,7 +51,7 @@ func (g *GlobalParams) InitParams() {
 	g.ValidProposals = make(map[string]common.Hash)        //id->hash
 	g.ProposalApproves = make(map[string][]common.Address) //id->address
 	g.ProposalEpoch = make(map[string]uint64)              //id->epoch
-	g.HashMap = make(map[common.Hash]uint8)
+	g.HashMap = make(map[common.Hash]string)
 }
 
 func in(target common.Address, str_array []common.Address) bool {

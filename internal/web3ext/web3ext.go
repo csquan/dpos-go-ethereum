@@ -593,6 +593,12 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
+			name: 'getPrposalID',
+			call: 'eth_getPrposalID',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
 			name: 'getHeaderByNumber',
 			call: 'eth_getHeaderByNumber',
 			params: 1,

@@ -134,6 +134,18 @@ func (api *API) GetVoteList(number *rpc.BlockNumber) (map[common.Address]common.
 	return candidates, nil
 }
 
+// GetCurEpoch retrieves current epoch
+func (api *API) GetCurEpoch(number *rpc.BlockNumber) (uint64, error) {
+	var header *types.Header
+
+	header = api.chain.CurrentHeader()
+
+	if header == nil {
+		return 0, errUnknownBlock
+	}
+	return header.Time / epochInterval, nil
+}
+
 // GetMintCnt 得到epoch的所有验证节点和对应的出块数
 // MintCntTrie数据格式：
 // key；mintCnt-周期数（2进制）-验证人

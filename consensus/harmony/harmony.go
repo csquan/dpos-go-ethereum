@@ -33,7 +33,7 @@ const (
 
 	blockInterval    = uint64(2)
 	epochInterval    = uint64(600)
-	maxValidatorSize = 1
+	maxValidatorSize = 5
 	safeSize         = maxValidatorSize*2/3 + 1
 	consensusSize    = maxValidatorSize*2/3 + 1
 )

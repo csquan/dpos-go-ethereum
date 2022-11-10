@@ -18,8 +18,10 @@ package ethapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"strings"
 	"time"
@@ -1741,6 +1743,24 @@ func (s *TransactionAPI) FillTransaction(ctx context.Context, args TransactionAr
 		return nil, err
 	}
 	return &SignTransactionResult{data, tx}, nil
+}
+
+func (s *TransactionAPI) GetGlobalParams(ctx context.Context) error {
+	// Set some sanity defaults and terminate on failure
+	gp := types.GlobalParams{}
+	g := rawdb.ReadParams(s.b.ChainDb())
+
+	if g == nil {
+		gp.InitParams()
+	} else {
+		err := json.Unmarshal(g, &gp)
+		if err != nil {
+			log.Error("Unmarshal,", "err", err)
+		}
+		log.Info("get ", "globalParams", gp)
+	}
+
+	return nil
 }
 
 // SendRawTransaction will add the signed transaction to the transaction pool.

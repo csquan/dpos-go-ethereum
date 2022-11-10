@@ -1099,7 +1099,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 				"uncles", len(env.uncles), "txs", env.tcount,
 				"gas", block.GasUsed(), "fees", totalFees(block, env.receipts),
 				"elapsed", common.PrettyDuration(time.Since(start)))
-			log.Debug("block header content", "header", block.Header())
+			log.Trace("block header content", "header", block.Header())
 
 		case <-w.exitCh:
 			log.Info("Worker has exited")

@@ -253,8 +253,6 @@ func testGenerateBlockAndImport(t *testing.T, isClique bool) {
 	for i := 0; i < 5; i++ {
 		b.txPool.AddLocal(b.newRandomTx(true))
 		b.txPool.AddLocal(b.newRandomTx(false))
-		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
-		w.postSideBlock(core.ChainSideEvent{Block: b.newRandomUncle()})
 
 		select {
 		case ev := <-sub.Chan():
@@ -361,8 +359,6 @@ func TestStreamUncleBlock(t *testing.T) {
 			t.Error("new task timeout")
 		}
 	}
-
-	w.postSideBlock(core.ChainSideEvent{Block: b.uncleBlock})
 
 	select {
 	case <-taskCh:
@@ -496,14 +492,12 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 	time.Sleep(time.Second) // Ensure two tasks have been submitted due to start opt
 	atomic.StoreUint32(&start, 1)
 
-	w.setRecommitInterval(3 * time.Second)
 	select {
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
 		t.Error("interval reset timeout")
 	}
 
-	w.resubmitAdjustCh <- &intervalAdjust{inc: true, ratio: 0.8}
 	select {
 	case <-progress:
 	case <-time.NewTimer(time.Second).C:
@@ -547,7 +541,6 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	defer w.close()
 
 	w.setExtra([]byte{0x01, 0x02})
-	w.postSideBlock(core.ChainSideEvent{Block: b.uncleBlock})
 
 	w.skipSealHook = func(task *task) bool {
 		return true

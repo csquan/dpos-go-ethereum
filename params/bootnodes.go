@@ -22,7 +22,9 @@ import "github.com/ethereum/go-ethereum/common"
 // the main Ethereum network.
 var MainnetBootnodes = []string{
 	// Ethereum Foundation Go Bootnodes
-	"enode://fea4ccd8f44faa50d463c04b78e9145557f1463070e797a62da6cbe21fe5aeee1664721a539a2e46de8a9ba6859fb580570b63fe07e1e513e8f7384aceee49da@192.168.2.231:30303",
+	"enode://e0b44770ddbf806a446c84814f2a43a8284e6ffdd0175b76182e3ca94ef27b4e55fdcb7f475af0056458a0eb3e1b99f49391fcd3f7357b2c71f108e2261171ef@18.163.116.227:30303",
+	"enode://5c83554ea0685f677fd1a6902ff51ee60216b70caba362397c918d8df3d5d7b002a2ff0a59878e5670a280f069eef6b471de8bfba91fd0d09a5bfbbefb292aa2@34.201.5.122:30303",
+	"enode://150bd5633e11b89805de8fd6368b7c0e8868564ff3bc9f8449b9f3cdc1b236d4868f6e965e0f2727b623ce497f4f72f7eda2c310eb8428eb1caea9bfd56ea69c@52.221.213.5:30303",
 }
 
 const dnsPrefix = "enrtree://AKA3AM6LPBYEUDMVNU3BSVQJ5AD45Y7YPOHJLEF6W26QOE4VTUDPE@"

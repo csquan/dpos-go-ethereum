@@ -19,8 +19,6 @@ package harmony
 import (
 	"bytes"
 	"encoding/binary"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -36,7 +34,7 @@ type API struct {
 }
 
 // MintKeyLen -> mint trie 的key 长度
-const MintKeyLen = 36
+const MintKeyLen = 28
 
 // GetValidators retrieves the list of the validators at specified block
 func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error) {
@@ -64,16 +62,9 @@ func (api *API) GetValidators(number *rpc.BlockNumber) ([]common.Address, error)
 }
 
 // GetConfirmedBlockNumber retrieves the latest irreversible block
-func (api *API) GetConfirmedBlockNumber() (*big.Int, error) {
-	var err error
-	header := api.engine.confirmedBlockHeader
-	if header == nil {
-		header, err = api.engine.loadConfirmedBlockHeader(api.chain)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return header.Number, nil
+func (api *API) GetConfirmedBlockNumber() (uint64, error) {
+	height := api.chain.CurrentHeader().Number.Uint64() - 7
+	return height, nil
 }
 
 // GetDelegateList retrieves DelegateTrie for canlidates and its Delegate
@@ -143,6 +134,18 @@ func (api *API) GetVoteList(number *rpc.BlockNumber) (map[common.Address]common.
 	return candidates, nil
 }
 
+// GetCurEpoch retrieves current epoch
+func (api *API) GetCurEpoch(number *rpc.BlockNumber) (uint64, error) {
+	var header *types.Header
+
+	header = api.chain.CurrentHeader()
+
+	if header == nil {
+		return 0, errUnknownBlock
+	}
+	return header.Time / epochInterval, nil
+}
+
 // GetMintCnt 得到epoch的所有验证节点和对应的出块数
 // MintCntTrie数据格式：
 // key；mintCnt-周期数（2进制）-验证人
@@ -172,17 +175,17 @@ func (api *API) GetMintCnt(epochID int) (map[common.Address]uint64, error) {
 		//return nil, errors.New("no candidates")
 	}
 	for existMint {
-		key := iterMint.Key
-		value := iterMint.Value
+		iterkey := iterMint.Key
+		itervalue := iterMint.Value
 
-		if len(key) != MintKeyLen {
+		if len(iterkey) != MintKeyLen {
 			log.Info("existMint len is not expected", "key", MintKeyLen)
 		}
 		//key 0-7 前缀 8-15 epoch 16-35 validator addr
-		validator := common.BytesToAddress(key[15:36])
+		epoch := binary.BigEndian.Uint64(iterkey[0:8])
 
-		epoch := binary.BigEndian.Uint64(key[8:16])
-		cnt := binary.BigEndian.Uint64(value)
+		validator := common.BytesToAddress(iterkey[8:28])
+		cnt := binary.BigEndian.Uint64(itervalue)
 
 		log.Info("votes", "epoch", epoch, "validator", validator, "value", cnt)
 

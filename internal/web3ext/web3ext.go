@@ -60,6 +60,11 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
+			name: 'getCurEpoch',
+			call: 'harmony_getCurEpoch',
+			params: 0
+		}),
+		new web3._extend.Method({
 			name: 'getMintCnt',
 			call: 'harmony_getMintCnt',
 			params: 1
@@ -581,6 +586,17 @@ web3._extend({
 			call: 'eth_fillTransaction',
 			params: 1,
 			inputFormatter: [web3._extend.formatters.inputTransactionFormatter]
+		}),
+		new web3._extend.Method({
+			name: 'getGlobalParams',
+			call: 'eth_getGlobalParams',
+			params: 0
+		}),
+		new web3._extend.Method({
+			name: 'getPrposalID',
+			call: 'eth_getPrposalID',
+			params: 1,
+			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
 			name: 'getHeaderByNumber',

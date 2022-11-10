@@ -109,6 +109,8 @@ var (
 
 	preimageCounter    = metrics.NewRegisteredCounter("db/preimage/total", nil)
 	preimageHitCounter = metrics.NewRegisteredCounter("db/preimage/hits", nil)
+
+	globalParams = []byte("hui chan global params")
 )
 
 // LegacyTxLookupEntry is the legacy TxLookupEntry definition with some unnecessary

@@ -57,6 +57,8 @@ const (
 	UnCandidateTxType
 	DelegateTxType
 	UnDelegateTxType
+	ProposalTxType
+	ApproveProposalTxType
 )
 
 // Transaction is an Ethereum transaction.
@@ -210,6 +212,14 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		return &inner, err
 	case UnDelegateTxType:
 		var inner VoteTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case ProposalTxType:
+		var inner ProposalTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
+	case ApproveProposalTxType:
+		var inner ProposalTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
 	default:

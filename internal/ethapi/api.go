@@ -18,8 +18,10 @@ package ethapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"strings"
 	"time"
@@ -1690,6 +1692,7 @@ func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (c
 	} else {
 		log.Info("Submitted transaction", "hash", tx.Hash().Hex(), "from", from, "nonce", tx.Nonce(), "recipient", tx.To(), "value", tx.Value())
 	}
+	//这里，如果交易类型是提案交易，那么返回一个
 	return tx.Hash(), nil
 }
 
@@ -1740,6 +1743,41 @@ func (s *TransactionAPI) FillTransaction(ctx context.Context, args TransactionAr
 		return nil, err
 	}
 	return &SignTransactionResult{data, tx}, nil
+}
+
+func (s *TransactionAPI) GetGlobalParams(ctx context.Context) error {
+	// Set some sanity defaults and terminate on failure
+	gp := types.GlobalParams{}
+	g := rawdb.ReadParams(s.b.ChainDb())
+
+	if g == nil {
+		gp.InitParams()
+	} else {
+		err := json.Unmarshal(g, &gp)
+		if err != nil {
+			log.Error("Unmarshal,", "err", err)
+		}
+		log.Info("get ", "globalParams", gp)
+	}
+
+	return nil
+}
+
+func (s *TransactionAPI) GetPrposalID(ctx context.Context, hash common.Hash) string {
+	// Set some sanity defaults and terminate on failure
+	gp := types.GlobalParams{}
+	g := rawdb.ReadParams(s.b.ChainDb())
+
+	if g == nil {
+		gp.InitParams()
+	} else {
+		err := json.Unmarshal(g, &gp)
+		if err != nil {
+			log.Error("Unmarshal,", "err", err)
+		}
+		log.Info("get ", "globalParams", gp)
+	}
+	return gp.HashMap[hash]
 }
 
 // SendRawTransaction will add the signed transaction to the transaction pool.

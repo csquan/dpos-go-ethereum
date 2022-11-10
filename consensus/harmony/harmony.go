@@ -41,8 +41,6 @@ const (
 var (
 	defaultDifficulty = common.Big1 // The default block defaultDifficulty in the harmony consensus
 
-	frontierBlockReward = big.NewInt(5e+18) // Block reward in wei for successfully mining a block
-
 	timeOfFirstBlock = uint64(0)
 
 	confirmedBlockHead = []byte("confirmed-block-head")
@@ -404,7 +402,6 @@ func (h *Harmony) Finalize(
 		if err != nil {
 			log.Error("Unmarshal,", "err", err)
 		}
-		log.Info("get ", "globalParams", s)
 	}
 
 	// Accumulate block rewards and commit the final state root

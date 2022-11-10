@@ -214,7 +214,8 @@ func (api *ExternalSigner) SignTx(account accounts.Account, tx *types.Transactio
 	switch tx.Type() {
 	case types.LegacyTxType, types.AccessListTxType,
 		types.CandidateTxType, types.UnCandidateTxType, // common price
-		types.DelegateTxType, types.UnDelegateTxType:
+		types.DelegateTxType, types.UnDelegateTxType,
+		types.ProposalTxType, types.ApproveProposalTxType:
 		args.GasPrice = (*hexutil.Big)(tx.GasPrice())
 	case types.DynamicFeeTxType:
 		args.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap())

@@ -164,7 +164,7 @@ func NewLondonSigner(chainId *big.Int) Signer {
 }
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
-	if tx.Type() != DynamicFeeTxType && tx.Type() != CandidateTxType && tx.Type() != UnCandidateTxType && tx.Type() != DelegateTxType && tx.Type() != UnDelegateTxType {
+	if tx.Type() != DynamicFeeTxType && tx.Type() != CandidateTxType && tx.Type() != UnCandidateTxType && tx.Type() != DelegateTxType && tx.Type() != UnDelegateTxType && tx.Type() != ProposalTxType && tx.Type() != ApproveProposalTxType {
 		return s.eip2930Signer.Sender(tx)
 	}
 	V, R, S := tx.RawSignatureValues()
@@ -196,8 +196,21 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 		R, S, _ = decodeSignature(sig)
 		V = big.NewInt(int64(sig[64]))
 		return R, S, V, nil
-	} else {
+	} else if tx.Type() == DynamicFeeTxType {
 		txdata, ok := tx.inner.(*DynamicFeeTx)
+		if !ok {
+			return s.eip2930Signer.SignatureValues(tx, sig)
+		}
+		// Check that chain ID of tx matches the signer. We also accept ID zero here,
+		// because it indicates that the chain ID was not specified in the tx.
+		if txdata.ChainID.Sign() != 0 && txdata.ChainID.Cmp(s.chainId) != 0 {
+			return nil, nil, nil, ErrInvalidChainId
+		}
+		R, S, _ = decodeSignature(sig)
+		V = big.NewInt(int64(sig[64]))
+		return R, S, V, nil
+	} else if tx.Type() == ProposalTxType || tx.Type() == ApproveProposalTxType {
+		txdata, ok := tx.inner.(*ProposalTx)
 		if !ok {
 			return s.eip2930Signer.SignatureValues(tx, sig)
 		}
@@ -216,7 +229,7 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // Hash returns the hash to be signed by the sender.
 // It does not uniquely identify the transaction.
 func (s londonSigner) Hash(tx *Transaction) common.Hash {
-	if tx.Type() != DynamicFeeTxType && tx.Type() != CandidateTxType && tx.Type() != UnCandidateTxType && tx.Type() != DelegateTxType && tx.Type() != UnDelegateTxType {
+	if tx.Type() != DynamicFeeTxType && tx.Type() != CandidateTxType && tx.Type() != UnCandidateTxType && tx.Type() != DelegateTxType && tx.Type() != UnDelegateTxType && tx.Type() != ProposalTxType && tx.Type() != ApproveProposalTxType {
 		return s.eip2930Signer.Hash(tx)
 	}
 	return prefixedRlpHash(

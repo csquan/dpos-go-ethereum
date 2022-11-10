@@ -3,7 +3,9 @@ package harmony
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"sync"
 	"time"
@@ -31,7 +33,7 @@ const (
 
 	blockInterval    = uint64(2)
 	epochInterval    = uint64(600)
-	maxValidatorSize = 5
+	maxValidatorSize = 1
 	safeSize         = maxValidatorSize*2/3 + 1
 	consensusSize    = maxValidatorSize*2/3 + 1
 )
@@ -86,9 +88,9 @@ type Harmony struct {
 	txSigner             types.Signer
 	signFn               SignerFn
 	confirmedBlockHeader *types.Header
-
-	mu   sync.RWMutex
-	stop chan bool
+	mu                   sync.RWMutex
+	stop                 chan bool
+	GlobalParams         types.GlobalParams
 }
 
 func (h *Harmony) FinalizeAndAssemble(
@@ -149,13 +151,14 @@ func sigHash(header *types.Header) (hash common.Hash) {
 func New(config *params.ChainConfig, engineDB ethdb.Database) *Harmony {
 	signatures, _ := lru.NewARC(inMemorySignatures)
 	ctx, _ := NewEmptyContext(engineDB)
-	return &Harmony{
-		config:     config.Harmony,
-		db:         engineDB,
-		ctx:        ctx,
-		txSigner:   types.LatestSigner(config),
-		signatures: signatures,
-	}
+
+	var h Harmony
+	h.config = config.Harmony
+	h.db = engineDB
+	h.ctx = ctx
+	h.txSigner = types.LatestSigner(config)
+	h.signatures = signatures
+	return &h
 }
 
 func (h *Harmony) Author(header *types.Header) (common.Address, error) {
@@ -376,11 +379,14 @@ func (h *Harmony) Prepare(chain consensus.ChainHeaderReader, header *types.Heade
 	return nil
 }
 
-func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header) {
+func AccumulateRewards(config *params.ChainConfig, state *state.StateDB, header *types.Header, uncles []*types.Header, rewards *big.Int) {
 	// Select the correct block reward based on chain progression
-	state.AddBalance(header.Coinbase, frontierBlockReward)
+	state.AddBalance(header.Coinbase, rewards)
 }
 
+func (h *Harmony) GetDB() ethdb.Database {
+	return h.db
+}
 func (h *Harmony) Finalize(
 	chain consensus.ChainHeaderReader,
 	header *types.Header,
@@ -388,9 +394,21 @@ func (h *Harmony) Finalize(
 	txs []*types.Transaction,
 	uncles []*types.Header,
 ) {
-	// Accumulate block rewards and commit the final state root
-	AccumulateRewards(chain.Config(), state, header, uncles)
+	s := types.GlobalParams{}
+	g := rawdb.ReadParams(h.db)
 
+	if g == nil {
+		s.InitParams()
+	} else {
+		err := json.Unmarshal(g, &s)
+		if err != nil {
+			log.Error("Unmarshal,", "err", err)
+		}
+		log.Info("get ", "globalParams", s)
+	}
+
+	// Accumulate block rewards and commit the final state root
+	AccumulateRewards(chain.Config(), state, header, uncles, s.FrontierBlockReward)
 	parent := chain.GetHeaderByHash(header.ParentHash)
 	epochContext := &EpochContext{
 		stateDB:   state,
@@ -404,12 +422,14 @@ func (h *Harmony) Finalize(
 	}
 	genesis := chain.GetHeaderByNumber(0)
 	err := epochContext.tryElect(genesis, parent)
+
 	if err != nil {
 		log.Error("got error when elect next epoch,", "err", err)
 	}
 
 	// apply vote txs here, these tx is no reason to fail, no err no revert needed
 	h.applyVoteTxs(txs)
+
 	//update mint count trie
 	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
 	if header.EngineInfo, err = h.ctx.Commit(); err != nil {

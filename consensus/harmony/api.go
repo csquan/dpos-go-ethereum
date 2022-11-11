@@ -105,7 +105,7 @@ func (api *API) GetDelegateList() (map[common.Address]common.Address, error) {
 // VoteTrie数据格式：
 // key：vote-投票人地址
 // value：候选人地址
-func (api *API) GetVoteList(number *rpc.BlockNumber) (map[common.Address]common.Address, error) {
+func (api *API) GetVoteList() (map[common.Address]common.Address, error) {
 	candidates := map[common.Address]common.Address{}
 
 	var header *types.Header
@@ -181,7 +181,7 @@ func (api *API) GetMintCnt(epochID int) (map[common.Address]uint64, error) {
 		if len(iterkey) != MintKeyLen {
 			log.Info("existMint len is not expected", "key", MintKeyLen)
 		}
-		//key 0-7 前缀 8-15 epoch 16-35 validator addr
+		//前缀 0 - 7  epoch 8-27 validator addr
 		epoch := binary.BigEndian.Uint64(iterkey[0:8])
 
 		validator := common.BytesToAddress(iterkey[8:28])

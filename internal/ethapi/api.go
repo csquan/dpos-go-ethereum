@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"strings"
@@ -654,6 +655,57 @@ func (s *BlockChainAPI) GetBalance(ctx context.Context, address common.Address, 
 		return nil, err
 	}
 	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+}
+
+// 或者这里调用newVoteTrie
+func GetVoteList(header *types.Header, engine *harmony.Harmony) (map[common.Address]common.Address, error) {
+	candidates := map[common.Address]common.Address{}
+
+	voteTrie, err := harmony.NewVoteTrie(header.EngineInfo.VoteHash, engine.GetDB())
+	if err != nil {
+		return nil, err
+	}
+
+	iterCandidate := voteTrie.Iterator(nil)
+	existCandidate := iterCandidate.Next()
+	if !existCandidate {
+		return candidates, errors.New("no candidates")
+	}
+	if existCandidate {
+		addr := iterCandidate.Key
+		candidate := iterCandidate.Value
+		candidates[common.BytesToAddress(addr)] = common.BytesToAddress(candidate)
+	}
+	return candidates, nil
+}
+
+func (s *BlockChainAPI) GetTopCanlidateVotes(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) (map[common.Address]*big.Int, error) {
+	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	if state == nil || err != nil {
+		return nil, err
+	}
+
+	votes := map[common.Address]*big.Int{}
+
+	header := s.b.CurrentHeader()
+	if engine, ok := s.b.Engine().(*harmony.Harmony); ok {
+		canlidates, err := GetVoteList(header, engine)
+		if err != nil {
+			return nil, err
+		}
+
+		for deletegateAddr, candidateAddr := range canlidates {
+			score, ok := votes[candidateAddr]
+			if !ok {
+				score = new(big.Int)
+			}
+			weight := state.GetBalance(deletegateAddr)
+			score.Add(score, weight)
+			votes[candidateAddr] = score
+		}
+	}
+
+	return votes, nil
 }
 
 // Result structs for GetProof

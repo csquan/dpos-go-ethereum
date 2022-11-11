@@ -5293,6 +5293,13 @@ var methods = function () {
         outputFormatter: formatters.outputBigNumberFormatter
     });
 
+    var getTopCanlidateVotes = new Method({
+        name: 'getTopCanlidateVotes',
+        call: 'eth_getTopCanlidateVotes',
+        params: 1,
+        inputFormatter: [formatters.inputDefaultBlockNumberFormatter],
+    });
+
     var getStorageAt = new Method({
         name: 'getStorageAt',
         call: 'eth_getStorageAt',
@@ -5458,6 +5465,7 @@ var methods = function () {
 
     return [
         getBalance,
+        getTopCanlidateVotes,
         getStorageAt,
         getCode,
         getBlock,

@@ -89,6 +89,11 @@ func newVoteTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
 	return newTrie(ownerVote, root, edb)
 }
 
+// 暴露给接口使用
+func NewVoteTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
+	return newTrie(ownerVote, root, edb)
+}
+
 func newMintTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
 	return newTrie(ownerMint, root, edb)
 }

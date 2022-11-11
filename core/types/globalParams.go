@@ -26,7 +26,6 @@ import (
 
 type GlobalParams struct {
 	FrontierBlockReward   *big.Int "json:frontierBlockReward"   //出块奖励
-	MaxValidatorSize      int      "json:maxValidatorSize"      //见证人数量--目前没找到在哪里生效
 	ProposalValidEpochCnt uint64   "json:proposalValidEpochCnt" //提案有效期
 
 	//有效提案
@@ -45,7 +44,6 @@ var (
 
 func (g *GlobalParams) InitParams() {
 	g.FrontierBlockReward = big.NewInt(5e+18)
-	g.MaxValidatorSize = 1
 	g.ProposalValidEpochCnt = 2
 
 	g.ValidProposals = make(map[string]common.Hash)        //id->hash
@@ -63,11 +61,9 @@ func in(target common.Address, str_array []common.Address) bool {
 	return false
 }
 
-func (g *GlobalParams) ApplyProposals(tx *Transaction, proposalTx *Transaction) error {
+func (g *GlobalParams) ApplyProposals(tx *Transaction, proposalTx *Transaction, threshold int) error {
 	//首先应该找到交易内容--提案ID，该提案在全局参数中是否存在：应该是tx 数据中的提案编号
 	id := string(tx.inner.data())
-
-	threshold := g.MaxValidatorSize/2 + 1
 
 	//授权是否足够:本次的授权是否大于等于门槛
 	if len(g.ProposalApproves[id]) >= threshold {
@@ -82,6 +78,9 @@ func (g *GlobalParams) ApplyProposals(tx *Transaction, proposalTx *Transaction) 
 		if name.String() == "frontierBlockReward" {
 			log.Warn("modify params", " name:", name.String(), " value:", value.String())
 			g.FrontierBlockReward.SetString(value.String(), 10)
+		} else if name.String() == "proposalValidEpochCnt" {
+			log.Warn("modify params", " name:", name.String(), " value:", value.String())
+			g.ProposalValidEpochCnt = uint64(value.Int())
 		} else {
 			log.Warn("can not found params to modify")
 			return ErrCannotFoundParams

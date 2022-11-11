@@ -1049,7 +1049,14 @@ func applyProposalTx(w *worker, env *environment) error {
 							return errInvalidSign
 						}
 						globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
-						globalParams.ApplyProposals(tx, proposalTx)
+
+						validators, err := engine.Ctx().GetValidators() //实时得到当前的见证人
+						if err != nil {
+							return fmt.Errorf("failed to get validator: %s", err)
+						}
+
+						globalParams.ApplyProposals(tx, proposalTx, len(validators))
+
 					}
 				}
 				data, err := json.Marshal(globalParams)

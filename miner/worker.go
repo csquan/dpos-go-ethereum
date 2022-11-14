@@ -701,11 +701,15 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	var err error
+	var receipt *types.Receipt
+	if ha, ok := w.engine.(*harmony.Harmony); ok {
+		err = ha.ApplyVoteTx(tx)
+	}
 	if err == nil {
-		if ha, ok := w.engine.(*harmony.Harmony); ok {
-			err = ha.ApplyVoteTx(tx)
-		}
+		receipt, err = core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
+	} else {
+		err = core.ErrVoteTx
 	}
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
@@ -762,6 +766,10 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 		logs, err := w.commitTransaction(env, tx)
 		switch {
+		case errors.Is(err, core.ErrVoteTx):
+			log.Trace("some vote tx error")
+			txs.Shift()
+
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
 			log.Trace("Gas limit exceeded for current block", "sender", from)

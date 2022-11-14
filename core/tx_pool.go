@@ -875,24 +875,32 @@ func (pool *TxPool) AddRemote(tx *types.Transaction) error {
 	return errs[0]
 }
 
+func logging(trace bool, msg string, ctx ...interface{}) {
+	if trace {
+		log.Trace(msg, ctx)
+	} else {
+		log.Debug(msg, ctx)
+	}
+}
+
 // logTxDebug display all q info in pool
-func (pool *TxPool) logTxDebug(seq string) {
+func (pool *TxPool) logTxDebug(seq string, trace bool) {
 	for _, tx := range pool.all.remotes {
-		log.Debug("pool.all.remote", "i", seq, "tx", txString(tx, pool.signer))
+		logging(trace, "pool.all.remote", "i", seq, "tx", txString(tx, pool.signer))
 	}
 	for a, lst := range pool.pending {
 		for i, tx := range lst.txs.items {
-			log.Debug("pending list", "i", seq, "addr", a, "n", i, "tx", txString(tx, pool.signer))
+			logging(trace, "pending list", "i", seq, "addr", a, "n", i, "tx", txString(tx, pool.signer))
 		}
 	}
 	for a, lst := range pool.queue {
 		for i, tx := range lst.txs.items {
-			log.Debug("queue list", "i", seq, "addr", a, "n", i, "tx", txString(tx, pool.signer))
+			logging(trace, "queue list", "i", seq, "addr", a, "n", i, "tx", txString(tx, pool.signer))
 		}
 	}
 	for a, n := range pool.pendingNonces.nonces {
 		s := pool.currentState.GetNonce(a)
-		log.Debug("nonce in pending and state", "i", seq, "addr", a, "pending", n, "state", s)
+		logging(trace, "nonce in pending and state", "i", seq, "addr", a, "pending", n, "state", s)
 	}
 }
 
@@ -935,7 +943,7 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 			log.Warn("addTxsLocked errs", "i", i, "err", err)
 		}
 	}
-	pool.logTxDebug("after addTxsLocked")
+	pool.logTxDebug("after addTxsLocked", true)
 	pool.mu.Unlock()
 
 	var nilSlot = 0
@@ -1214,7 +1222,7 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 
 	dropBetweenReorgHistogram.Update(int64(pool.changesSinceReorg))
 	pool.changesSinceReorg = 0 // Reset change counter
-	pool.logTxDebug("after reorg")
+	pool.logTxDebug("after reorg", true)
 	pool.mu.Unlock()
 
 	// Notify subsystems for newly added transactions

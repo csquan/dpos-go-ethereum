@@ -105,6 +105,7 @@ func (api *API) GetDelegateList() (map[common.Address]common.Address, error) {
 // VoteTrie数据格式：
 // key：vote-投票人地址
 // value：候选人地址
+// 这里需要看到开始的几个见证人自己给自己的投票--取vote树完了后，然后取当前委托者列表，取个并集
 func (api *API) GetVoteList() (map[common.Address]common.Address, error) {
 	candidates := map[common.Address]common.Address{}
 
@@ -123,14 +124,23 @@ func (api *API) GetVoteList() (map[common.Address]common.Address, error) {
 
 	iterCandidate := voteTrie.Iterator(nil)
 	existCandidate := iterCandidate.Next()
-	if !existCandidate {
-		//return votes, errors.New("no candidates")
-	}
+
 	if existCandidate {
 		addr := iterCandidate.Key
 		candidate := iterCandidate.Value
 		candidates[common.BytesToAddress(addr)] = common.BytesToAddress(candidate)
 	}
+	delegates, err := api.GetDelegateList()
+
+	if err != nil {
+		return candidates, err
+	}
+	for delegate, canlidate := range delegates {
+		if _, ok := candidates[delegate]; !ok {
+			candidates[delegate] = canlidate
+		}
+	}
+
 	return candidates, nil
 }
 
@@ -231,6 +241,7 @@ func (api *API) GetValidatorMintCnt(epochID int, addr string) (uint64, error) {
 func (api *API) GetCandidates() ([]common.Address, error) {
 	var header *types.Header
 	var candidates []common.Address
+
 	header = api.chain.CurrentHeader()
 
 	if header == nil {

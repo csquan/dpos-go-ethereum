@@ -13,6 +13,8 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+var ErrDelegateInvalid = errors.New("delegatorAddr is in validators and invalid,please unstake first")
+
 type Trie struct {
 	t *trie.Trie
 	d *trie.Database
@@ -235,6 +237,26 @@ func (c *Context) BecomeCandidate(candidateAddr common.Address) error {
 }
 
 func (c *Context) Delegate(delegatorAddr, candidateAddr common.Address) error {
+	//这里应该加个逻辑：当delegatorAddr是见证人，为了防止见证人资金重复质押。所以当delegatorAddr是见证人时，在deleTrie树是否有该地址，有的话应该提示用户先取消质押
+	validators, err := c.GetValidators()
+	if err != nil {
+		return err
+	}
+	for _, value := range validators {
+		if delegatorAddr == value {
+			//看deletaTrie树是否有该地址，有的话应该提示用户先取消质押
+			delegates, err := c.GetDelegates()
+
+			if err != nil {
+				return err
+			}
+			if delegates[delegatorAddr].String() != "" {
+
+				return ErrDelegateInvalid
+			}
+		}
+	}
+
 	delegator, candidate := delegatorAddr.Bytes(), candidateAddr.Bytes()
 
 	// the candidate must be candidate
@@ -339,6 +361,24 @@ func (c *Context) GetValidators() ([]common.Address, error) {
 		return nil, fmt.Errorf("failed to decode validators: %s", err)
 	}
 	return validators, nil
+}
+
+func (c *Context) GetDelegates() (map[common.Address]common.Address, error) {
+	delegates := map[common.Address]common.Address{}
+
+	ctxTrie := c.DelegateTrie()
+	iterDelegate := ctxTrie.Iterator(nil)
+	existDelegate := iterDelegate.Next()
+	if !existDelegate {
+		return delegates, errors.New("no delegates")
+	}
+	for existDelegate {
+		addr := iterDelegate.Key
+		candidate := iterDelegate.Value
+		delegates[common.BytesToAddress(addr)] = common.BytesToAddress(candidate)
+		existDelegate = iterDelegate.Next()
+	}
+	return delegates, nil
 }
 
 func (c *Context) SetValidators(validators []common.Address) error {

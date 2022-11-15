@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/tidwall/gjson"
 )
 
 const (
@@ -86,6 +87,10 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	ErrInvalidJsonProposal = errors.New("invalid json format in proposal tx")
+
+	ErrInvalidDataProposal = errors.New("invalid json data in proposal tx")
 )
 
 var (
@@ -631,6 +636,18 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
+	}
+	//增加验证：对于提案类型，需要验证：1.是否有效的json格式 2.是否是规定的修改内容
+	if tx.Type() == types.ProposalTxType {
+		data := tx.Data()
+		name := gjson.Get(string(data), "name")
+		if name.String() == "" {
+			return ErrInvalidJsonProposal
+		}
+		if name.String() != "frontierBlockReward" && name.String() != "proposalValidEpochCnt" {
+			return ErrInvalidDataProposal
+		}
+		fmt.Printf("%s", name)
 	}
 	return nil
 }

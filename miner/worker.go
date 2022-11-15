@@ -703,7 +703,8 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 
 	var err error
 	var receipt *types.Receipt
-	if ha, ok := w.engine.(*harmony.Harmony); ok {
+	ha, ok := w.engine.(*harmony.Harmony)
+	if ok {
 		err = ha.ApplyVoteTx(tx)
 	}
 	if err == nil {
@@ -711,8 +712,12 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	} else {
 		err = core.ErrVoteTx
 	}
+
+	harmonySnap := ha.Ctx().Snapshot()
+
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
+		ha.Ctx().RevertToSnapShot(harmonySnap)
 		return nil, err
 	}
 	env.txs = append(env.txs, tx)

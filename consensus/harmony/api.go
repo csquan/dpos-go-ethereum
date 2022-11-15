@@ -67,40 +67,6 @@ func (api *API) GetConfirmedBlockNumber() (uint64, error) {
 	return height, nil
 }
 
-// GetDelegateList retrieves DelegateTrie for canlidates and its Delegate
-// DelegateTrie数据格式：
-// key：delegate-候选人地址-投票人地址
-// value：投票人地址
-func (api *API) GetDelegateList() (map[common.Address]common.Address, error) {
-	delegates := map[common.Address]common.Address{}
-
-	var header *types.Header
-
-	header = api.chain.CurrentHeader()
-
-	if header == nil {
-		return nil, errUnknownBlock
-	}
-
-	ctxTrie, err := newDelegateTrie(header.EngineInfo.DelegateHash, api.engine.db)
-	if err != nil {
-		return nil, err
-	}
-
-	iterDelegate := ctxTrie.Iterator(nil)
-	existDelegate := iterDelegate.Next()
-	if !existDelegate {
-		//return delegates, errors.New("no delegates")
-	}
-	for existDelegate {
-		addr := iterDelegate.Key
-		candidate := iterDelegate.Value
-		delegates[common.BytesToAddress(addr)] = common.BytesToAddress(candidate)
-		existDelegate = iterDelegate.Next()
-	}
-	return delegates, nil
-}
-
 // GetVoteList retrieves voteTrie return Delegate and its vote guy
 // VoteTrie数据格式：
 // key：vote-投票人地址
@@ -125,20 +91,12 @@ func (api *API) GetVoteList() (map[common.Address]common.Address, error) {
 	iterCandidate := voteTrie.Iterator(nil)
 	existCandidate := iterCandidate.Next()
 
-	if existCandidate {
+	for existCandidate {
 		addr := iterCandidate.Key
 		candidate := iterCandidate.Value
 		candidates[common.BytesToAddress(addr)] = common.BytesToAddress(candidate)
-	}
-	delegates, err := api.GetDelegateList()
 
-	if err != nil {
-		return candidates, err
-	}
-	for delegate, canlidate := range delegates {
-		if _, ok := candidates[delegate]; !ok {
-			candidates[delegate] = canlidate
-		}
+		existCandidate = iterCandidate.Next()
 	}
 
 	return candidates, nil

@@ -56,9 +56,9 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 		}
 		existCandidate = iterCandidate.Next()
 	}
-	log.Debug("*******in epoch get vote*********")
+	log.Info("*******in epoch get vote*********")
 	for k, v := range votes {
-		log.Debug("votes", "key", k.String(), "value", v)
+		log.Info("votes", "key", k.String(), "value", v)
 	}
 	return votes, nil
 }

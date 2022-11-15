@@ -49,11 +49,6 @@ web3._extend({
 			params: 0,
 			outputFormatter: web3._extend.utils.toBigNumber
 		}),
-        new web3._extend.Method({
-			name: 'getDelegateList',
-			call: 'harmony_getDelegateList',
-			params: 0
-		}),
 		new web3._extend.Method({
 			name: 'getVoteList',
 			call: 'harmony_getVoteList',

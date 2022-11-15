@@ -84,7 +84,7 @@ func TestLookupValidator(t *testing.T) {
 	}
 }
 
-func TestEpochContextKickoutValidator(t *testing.T) {
+func TestEpochContextKickOutValidator(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
 	stateDB, _ := state.New(common.Hash{}, state.NewDatabase(db), nil)
 	ctx, err := NewEmptyContext(db)

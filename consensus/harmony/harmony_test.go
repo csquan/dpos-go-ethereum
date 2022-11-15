@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	MockEpoch = []string{
+	addrs = []string{
 		"0x44d1ce0b7cb3588bca96151fe1bc05af38f91b6e",
 		"0xa60a3886b552ff9992cfcd208ec1152079e046c2",
 		"0x4e080e49f62694554871e669aeb4ebe17c4a9670",
@@ -41,16 +41,16 @@ func mockNewContext(db ethdb.Database) *Context {
 	if err != nil {
 		return nil
 	}
-	delegator := []byte{}
-	candidate := []byte{}
-	addresses := []common.Address{}
+	var delegator []byte
+	var candidate []byte
+	var addresses []common.Address
 	for i := 0; i < maxValidatorSize; i++ {
-		addresses = append(addresses, common.HexToAddress(MockEpoch[i]))
+		addresses = append(addresses, common.HexToAddress(addrs[i]))
 	}
-	ctx.SetValidators(addresses)
-	for j := 0; j < len(MockEpoch); j++ {
-		delegator = common.HexToAddress(MockEpoch[j]).Bytes()
-		candidate = common.HexToAddress(MockEpoch[j]).Bytes()
+	_ = ctx.SetValidators(addresses)
+	for j := 0; j < len(addrs); j++ {
+		delegator = common.HexToAddress(addrs[j]).Bytes()
+		candidate = common.HexToAddress(addrs[j]).Bytes()
 		ctx.delegateTrie.t.TryUpdate(append(candidate, delegator...), candidate)
 		ctx.candidateTrie.t.TryUpdate(candidate, candidate)
 		ctx.voteTrie.t.TryUpdate(candidate, candidate)

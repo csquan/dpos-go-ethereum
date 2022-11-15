@@ -151,6 +151,54 @@ func TestContextDelegateAndUnDelegate(t *testing.T) {
 	assert.False(t, voteIter1.Next())
 }
 
+func TestContextReDelegate(t *testing.T) {
+	validatorStr := "44d1ce0b7cb3588bca96151fe1bc05af38f91b6e"
+	newCandidateStr := "a60a3886b552ff9992cfcd208ec1152079e046c2"
+	validator := common.HexToAddress(validatorStr)
+	newCandidate := common.HexToAddress(newCandidateStr)
+	db := rawdb.NewMemoryDatabase()
+	ctx, err := NewEmptyContext(db)
+	assert.Nil(t, err)
+	assert.Nil(t, ctx.BecomeCandidate(validator))
+	assert.Nil(t, ctx.Delegate(validator, validator))
+	assert.Nil(t, ctx.BecomeCandidate(newCandidate))
+	assert.Nil(t, ctx.Delegate(validator, newCandidate))
+
+	// delegator delegate to not exist candidate
+	canIter0 := ctx.candidateTrie.Iterator(nil)
+	candidateMap := map[string]bool{}
+	for canIter0.Next() {
+		candidateMap[common.Bytes2Hex(canIter0.Value)] = true
+	}
+	assert.Equal(t, 2, len(candidateMap))
+
+	// delegator delegate to old candidate
+	deIterCan := ctx.delegateTrie.Iterator(validator.Bytes())
+	delegateMap := map[string]bool{}
+	for deIterCan.Next() {
+		delegateMap[common.Bytes2Hex(deIterCan.Value)] = true
+	}
+	assert.Equal(t, 0, len(delegateMap))
+
+	newDeIterCan := ctx.delegateTrie.Iterator(newCandidate.Bytes())
+	delegateMap2 := map[string]bool{}
+	delegateKey2 := map[string]bool{}
+	for newDeIterCan.Next() {
+		delegateMap2[common.Bytes2Hex(newDeIterCan.Value)] = true
+		delegateKey2[common.Bytes2Hex(newDeIterCan.Key)] = true
+	}
+	assert.Equal(t, 1, len(delegateMap2))
+	assert.True(t, delegateMap2[validatorStr])
+	assert.True(t, delegateKey2[newCandidateStr+validatorStr])
+
+	voteIter0 := ctx.voteTrie.Iterator(nil)
+	voteMap := map[string]bool{}
+	for voteIter0.Next() {
+		voteMap[common.Bytes2Hex(voteIter0.Value)] = true
+	}
+	assert.Equal(t, 1, len(voteMap))
+}
+
 func TestContextValidators(t *testing.T) {
 	validators := []common.Address{
 		common.HexToAddress("0x44d1ce0b7cb3588bca96151fe1bc05af38f91b6e"),

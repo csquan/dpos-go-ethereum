@@ -671,10 +671,12 @@ func GetVoteList(header *types.Header, engine *harmony.Harmony) (map[common.Addr
 	if !existCandidate {
 		return candidates, errors.New("no candidates")
 	}
-	if existCandidate {
+	for existCandidate {
 		addr := iterCandidate.Key
 		candidate := iterCandidate.Value
 		candidates[common.BytesToAddress(addr)] = common.BytesToAddress(candidate)
+
+		existCandidate = iterCandidate.Next()
 	}
 	return candidates, nil
 }

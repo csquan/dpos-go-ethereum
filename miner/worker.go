@@ -1034,7 +1034,7 @@ func applyProposalTx(w *worker, env *environment) error {
 				//写回rawdb
 				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
 			}
-			if tx.Type() == types.ApproveProposalTxType { //表决交易
+			if tx.Type() == types.ApproveProposalTxType { //表决交易--仅仅将授权放入，具体处理在选举中
 				//取出全局参数
 				globalParams, err := getParams(engine)
 				if err != nil {
@@ -1044,13 +1044,11 @@ func applyProposalTx(w *worker, env *environment) error {
 				validators, _ := engine.Ctx().GetValidators()
 				id := string(tx.Data())
 
-				if hash, ok := globalParams.ValidProposals[id]; ok { // 存在有效提案
+				if _, ok := globalParams.ValidProposals[id]; ok { // 存在有效提案
 					curEpoch := env.header.Time / epochInterval //查看当前id是否过期
 					validCnt := globalParams.ProposalValidEpochCnt
 
 					if curEpoch <= globalParams.ProposalEpoch[id]+validCnt {
-						proposalTx := w.eth.BlockChain().GetTransaction(hash)
-
 						//找到tx的from地址
 						msg, err := tx.AsMessage(types.MakeSigner(w.chainConfig, env.header.Number), env.header.BaseFee)
 						if err != nil {
@@ -1062,14 +1060,6 @@ func applyProposalTx(w *worker, env *environment) error {
 							return errInvalidSign
 						}
 						globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
-
-						validators, err := engine.Ctx().GetValidators() //实时得到当前的见证人
-						if err != nil {
-							return fmt.Errorf("failed to get validator: %s", err)
-						}
-
-						globalParams.ApplyProposals(tx, proposalTx, len(validators))
-
 					}
 				}
 				data, err := json.Marshal(globalParams)

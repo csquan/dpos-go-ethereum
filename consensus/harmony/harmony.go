@@ -417,8 +417,9 @@ func (h *Harmony) Finalize(
 			timeOfFirstBlock = firstBlockHeader.Time
 		}
 	}
+
 	genesis := chain.GetHeaderByNumber(0)
-	err := epochContext.tryElect(genesis, parent)
+	err := epochContext.tryElect(genesis, parent, h)
 
 	if err != nil {
 		log.Error("got error when elect next epoch,", "err", err)

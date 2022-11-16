@@ -61,13 +61,10 @@ func in(target common.Address, str_array []common.Address) bool {
 	return false
 }
 
-func (g *GlobalParams) ApplyProposals(tx *Transaction, proposalTx *Transaction, threshold int) error {
-	//首先应该找到交易内容--提案ID，该提案在全局参数中是否存在：应该是tx 数据中的提案编号
-	id := string(tx.inner.data())
-
+func (g *GlobalParams) ApplyProposals(id string, proposalTx *Transaction, threshold int) error {
 	//授权是否足够:本次的授权是否大于等于门槛
 	if len(g.ProposalApproves[id]) >= threshold {
-		log.Warn("proposal approved above threshold")
+		log.Info("proposal approved above threshold")
 		//todo：应该放在事务中
 		//proposalTx中数据应该是参数修改内容--json：string(proposalTx.Data())
 		json := string(proposalTx.Data())

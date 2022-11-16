@@ -2,8 +2,10 @@ package harmony
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -12,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -148,7 +151,7 @@ func (ec *EpochContext) lookupValidator(now uint64) (validator common.Address, e
 	return validators[offset], nil
 }
 
-func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
+func (ec *EpochContext) tryElect(genesis, parent *types.Header, h *Harmony) error {
 	genesisEpoch := genesis.Time / epochInterval
 	prevEpoch := parent.Time / epochInterval
 	currentEpoch := ec.TimeStamp / epochInterval
@@ -203,7 +206,57 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header) error {
 		}
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
+	approveProposal(h, currentEpoch)
 	return nil
+}
+func GetTransaction(db ethdb.Database, hash common.Hash) *types.Transaction {
+	tx, _, _, _ := rawdb.ReadTransaction(db, hash)
+	if tx == nil {
+		return nil
+	}
+	return tx
+}
+
+// 遍历授权列表--如果提案没有过期，则调用globalParams.ApplyProposals
+func approveProposal(engine *Harmony, currentEpoch uint64) error {
+	globalParams, err := getParams(engine)
+	if err != nil {
+		return err
+	}
+
+	for id, _ := range globalParams.ProposalApproves {
+		validCnt := globalParams.ProposalValidEpochCnt
+
+		if currentEpoch <= globalParams.ProposalEpoch[id]+validCnt { //查看当前id是否过期
+			hash := globalParams.ValidProposals[id]
+
+			proposalTx := GetTransaction(engine.db, hash)
+			if proposalTx == nil {
+				log.Info("In approveProposal", "can not find tx of hash:", hash)
+				continue
+			}
+			validators, err := engine.Ctx().GetValidators() //实时得到当前的见证人
+			if err != nil {
+				return fmt.Errorf("failed to get validator: %s", err)
+			}
+			threshold := len(validators)/2 + 1 // 这里门槛的设置需要再考虑
+			globalParams.ApplyProposals(id, proposalTx, threshold)
+		}
+	}
+	return nil
+}
+
+func getParams(engine *Harmony) (types.GlobalParams, error) {
+	globalParams := types.GlobalParams{}
+	g := rawdb.ReadParams(engine.GetDB())
+
+	err := json.Unmarshal(g, &globalParams)
+	if err != nil {
+		log.Error("Unmarshal,", "err", err)
+	}
+	log.Info("get ", "globalParams", globalParams)
+	return globalParams, err
+
 }
 
 type sortableAddress struct {

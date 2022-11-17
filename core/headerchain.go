@@ -516,14 +516,14 @@ func (hc *HeaderChain) GetHeadersFrom(number, count uint64) []rlp.RawValue {
 	}
 	var headers []rlp.RawValue
 	// If we have some of the headers in cache already, use that before going to db.
+	hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
+	if hash == (common.Hash{}) {
+		return nil
+	}
 	for count > 0 {
-		hash := rawdb.ReadCanonicalHash(hc.chainDb, number)
-		if hash == (common.Hash{}) {
-			return nil
-		}
 		header, ok := hc.headerCache.Get(hash)
 		if !ok {
-			header = hc.GetHeader(hash, number)
+			break
 		}
 		h := header.(*types.Header)
 		rlpData, _ := rlp.EncodeToBytes(h)

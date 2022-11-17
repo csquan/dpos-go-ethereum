@@ -395,13 +395,9 @@ func (h *Harmony) Finalize(
 	s := types.GlobalParams{}
 	g := rawdb.ReadParams(h.db)
 
-	if g == nil {
-		s.InitParams()
-	} else {
-		err := json.Unmarshal(g, &s)
-		if err != nil {
-			log.Error("Unmarshal,", "err", err)
-		}
+	err := json.Unmarshal(g, &s)
+	if err != nil {
+		log.Error("Unmarshal,", "err", err)
 	}
 
 	// Accumulate block rewards and commit the final state root
@@ -419,7 +415,7 @@ func (h *Harmony) Finalize(
 	}
 
 	genesis := chain.GetHeaderByNumber(0)
-	err := epochContext.tryElect(genesis, parent, h)
+	err = epochContext.tryElect(genesis, parent, h)
 
 	if err != nil {
 		log.Error("got error when elect next epoch,", "err", err)

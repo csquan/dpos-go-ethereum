@@ -29,7 +29,10 @@ type GlobalParams struct {
 	ProposalValidEpochCnt uint64   "json:proposalValidEpochCnt" //提案有效期
 
 	//有效提案
-	ValidProposals   map[string]common.Hash      "json:validProposals"   //id->hash
+	ValidProposals map[string]common.Hash "json:validProposals" //id->hash
+	//提案处理后，会移动到无效提案中
+	InValidProposals map[string]common.Hash "json:invalidProposals" //id->hash
+
 	ProposalApproves map[string][]common.Address "json:proposalApproves" //id->address
 
 	HashMap map[common.Hash]string "json:hashMap" //hash-uint8 hash map 用途是为了1。快速确定hash是否被处理过 2。快速从hash找到ID
@@ -48,7 +51,10 @@ func (g *GlobalParams) InitParams() {
 
 	g.ValidProposals = make(map[string]common.Hash)        //id->hash
 	g.ProposalApproves = make(map[string][]common.Address) //id->address
-	g.ProposalEpoch = make(map[string]uint64)              //id->epoch
+
+	g.InValidProposals = make(map[string]common.Hash) //id->hash
+
+	g.ProposalEpoch = make(map[string]uint64) //id->epoch
 	g.HashMap = make(map[common.Hash]string)
 }
 
@@ -75,9 +81,19 @@ func (g *GlobalParams) ApplyProposals(id string, proposalTx *Transaction, thresh
 		if name.String() == "frontierBlockReward" {
 			log.Warn("modify params", " name:", name.String(), " value:", value.String())
 			g.FrontierBlockReward.SetString(value.String(), 10)
+
+			//将ID在ValidProposals中删除，同时移动到InValidProposals中
+			g.InValidProposals[id] = g.ValidProposals[id]
+			delete(g.ValidProposals, id)
+			return nil
 		} else if name.String() == "proposalValidEpochCnt" {
 			log.Warn("modify params", " name:", name.String(), " value:", value.String())
 			g.ProposalValidEpochCnt = uint64(value.Int())
+
+			//将ID在ValidProposals中删除，同时移动到InValidProposals中
+			g.InValidProposals[id] = g.ValidProposals[id]
+			delete(g.ValidProposals, id)
+			return nil
 		} else {
 			log.Warn("can not found params to modify")
 			return ErrCannotFoundParams

@@ -1020,7 +1020,7 @@ func applyProposalTx(w *worker, env *environment) error {
 					return nil
 				}
 				log.Info("got ProposalTxType")
-				len := len(globalParams.ValidProposals)
+				len := len(globalParams.ValidProposals) + len(globalParams.InValidProposals)
 				id := fmt.Sprintf("%s.%d", params.Version, len)
 				globalParams.ValidProposals[id] = tx.Hash()
 				globalParams.HashMap[tx.Hash()] = id //表示已经被处理，这里要提出第二次广播又进来的交易

@@ -18,6 +18,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
+var globalParamsKey = []byte("hui chan global params")
+
 type EpochContext struct {
 	TimeStamp uint64
 	Context   *Context
@@ -168,6 +170,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header, h *Harmony) erro
 	binary.BigEndian.PutUint64(prevEpochBytes, prevEpoch)
 	iter := ec.Context.mintCntTrie.Iterator(prevEpochBytes)
 	for i := prevEpoch; i < currentEpoch; i++ {
+		approveProposal(h, currentEpoch)
 		// if prevEpoch is not genesis, kick-out candidates not active
 		if !prevEpochIsGenesis && iter.Next() {
 			if err := ec.kickOutValidator(prevEpoch); err != nil {
@@ -204,9 +207,9 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header, h *Harmony) erro
 		if err = ec.Context.SetValidators(sortedValidators); err != nil {
 			log.Warn("set new validators", "err", err)
 		}
+
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
 	}
-	approveProposal(h, currentEpoch)
 	return nil
 }
 func GetTransaction(db ethdb.Database, hash common.Hash) *types.Transaction {
@@ -224,7 +227,7 @@ func approveProposal(engine *Harmony, currentEpoch uint64) error {
 		return err
 	}
 
-	for id, _ := range globalParams.ProposalApproves {
+	for id, _ := range globalParams.ValidProposals {
 		validCnt := globalParams.ProposalValidEpochCnt
 
 		if currentEpoch <= globalParams.ProposalEpoch[id]+validCnt { //查看当前id是否过期
@@ -240,7 +243,26 @@ func approveProposal(engine *Harmony, currentEpoch uint64) error {
 				return fmt.Errorf("failed to get validator: %s", err)
 			}
 			threshold := len(validators)/2 + 1 // 这里门槛的设置需要再考虑
-			globalParams.ApplyProposals(id, proposalTx, threshold)
+			err = globalParams.ApplyProposals(id, proposalTx, threshold)
+			if err == nil { //表示执行成功
+				data, err := json.Marshal(globalParams)
+				if err != nil {
+					return err
+				}
+				//写回rawdb
+				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
+			}
+		} else { //过期了-移动id到invalid中
+			//将ID在ValidProposals中删除，同时移动到InValidProposals中
+			globalParams.InValidProposals[id] = globalParams.ValidProposals[id]
+			delete(globalParams.ValidProposals, id)
+
+			data, err := json.Marshal(globalParams)
+			if err != nil {
+				return err
+			}
+			//写回rawdb
+			rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
 		}
 	}
 	return nil

@@ -87,7 +87,6 @@ type Harmony struct {
 	signFn               SignerFn
 	confirmedBlockHeader *types.Header
 	mu                   sync.RWMutex
-	stop                 chan bool
 	GlobalParams         types.GlobalParams
 }
 
@@ -213,7 +212,7 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time+blockInterval > header.Time {
+	if parent.Time+blockInterval > header.Time+1 {
 		return ErrInvalidTimestamp
 	}
 	return nil
@@ -283,10 +282,10 @@ func (h *Harmony) verifyBlockSigner(validator common.Address, header *types.Head
 	if err != nil {
 		return err
 	}
-	if bytes.Compare(signer.Bytes(), validator.Bytes()) != 0 {
+	if !bytes.Equal(signer.Bytes(), validator.Bytes())  {
 		return ErrInvalidBlockValidator
 	}
-	if bytes.Compare(signer.Bytes(), header.Coinbase.Bytes()) != 0 {
+	if !bytes.Equal(signer.Bytes(), header.Coinbase.Bytes()) {
 		return ErrMismatchSignerAndValidator
 	}
 	return nil
@@ -363,6 +362,7 @@ func (h *Harmony) storeConfirmedBlockHeader(db ethdb.Database) error {
 func (h *Harmony) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
 	header.Nonce = types.BlockNonce{}
 	number := header.Number.Uint64()
+	header.Time = uint64(time.Now().Unix())
 	if len(header.Extra) < extraVanity {
 		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
 	}
@@ -505,7 +505,7 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 	if err != nil {
 		return err
 	}
-	if (validator == common.Address{}) || bytes.Compare(validator.Bytes(), h.signer.Bytes()) != 0 {
+	if (validator == common.Address{}) || !bytes.Equal(validator.Bytes(), h.signer.Bytes()) {
 		return ErrInvalidBlockValidator
 	}
 	return nil
@@ -522,7 +522,6 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	now := uint64(time.Now().Unix())
 	delay := nextSlot(now) - now
 
-	block.Header().Time = uint64(time.Now().Unix())
 	// time's up, sign the block
 	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(block.Header()).Bytes())
 	if err != nil {

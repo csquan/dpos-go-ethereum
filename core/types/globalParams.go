@@ -79,7 +79,7 @@ func (g *GlobalParams) ApplyProposals(id string, proposalTx *Transaction, thresh
 		value := gjson.Parse(json).Get("value")
 
 		if name.String() == "frontierBlockReward" {
-			log.Warn("modify params", " name:", name.String(), " value:", value.String())
+			log.Info("modify params", " name:", name.String(), " value:", value.String())
 			g.FrontierBlockReward.SetString(value.String(), 10)
 
 			//将ID在ValidProposals中删除，同时移动到InValidProposals中
@@ -87,7 +87,7 @@ func (g *GlobalParams) ApplyProposals(id string, proposalTx *Transaction, thresh
 			delete(g.ValidProposals, id)
 			return nil
 		} else if name.String() == "proposalValidEpochCnt" {
-			log.Warn("modify params", " name:", name.String(), " value:", value.String())
+			log.Info("modify params", " name:", name.String(), " value:", value.String())
 			g.ProposalValidEpochCnt = uint64(value.Int())
 
 			//将ID在ValidProposals中删除，同时移动到InValidProposals中

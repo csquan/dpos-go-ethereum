@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -993,6 +994,18 @@ func in(target common.Address, str_array []common.Address) bool {
 	return false
 }
 
+func getParamsFromDB(db ethdb.Database) (types.GlobalParams, error) {
+	globalParams := types.GlobalParams{}
+	g := rawdb.ReadParams(db)
+
+	err := json.Unmarshal(g, &globalParams)
+	if err != nil {
+		log.Error("Unmarshal,", "err", err)
+	}
+	log.Info("get ", "globalParams", globalParams)
+	return globalParams, err
+}
+
 func getParams(engine *harmony.Harmony) (types.GlobalParams, error) {
 	globalParams := types.GlobalParams{}
 	g := rawdb.ReadParams(engine.GetDB())
@@ -1003,9 +1016,9 @@ func getParams(engine *harmony.Harmony) (types.GlobalParams, error) {
 	}
 	log.Info("get ", "globalParams", globalParams)
 	return globalParams, err
-
 }
 
+// 出块调用
 func applyProposalTx(w *worker, env *environment) error {
 	if engine, ok := w.engine.(*harmony.Harmony); ok {
 		for _, tx := range env.txs {

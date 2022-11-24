@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"sync"
@@ -36,6 +37,11 @@ const (
 	maxValidatorSize = 5
 	safeSize         = maxValidatorSize*2/3 + 1
 	consensusSize    = maxValidatorSize*2/3 + 1
+)
+
+var (
+	errInvalidSign  = errors.New("tx is not sign by valid validator")
+	errMarshalError = errors.New("marshal error")
 )
 
 var (
@@ -282,7 +288,7 @@ func (h *Harmony) verifyBlockSigner(validator common.Address, header *types.Head
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(signer.Bytes(), validator.Bytes())  {
+	if !bytes.Equal(signer.Bytes(), validator.Bytes()) {
 		return ErrInvalidBlockValidator
 	}
 	if !bytes.Equal(signer.Bytes(), header.Coinbase.Bytes()) {
@@ -423,7 +429,11 @@ func (h *Harmony) Finalize(
 
 	// apply vote txs here, these tx is no reason to fail, no err no revert needed
 	h.applyVoteTxs(txs)
-
+	//apply proposal txs here,these tx is no reason to fail, no err no revert needed
+	err = h.applyProposalTx(txs, header, chain.Config())
+	if err != nil {
+		log.Error("applyProposalTx error", "err", err)
+	}
 	//update mint count trie
 	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
 	if header.EngineInfo, err = h.ctx.Commit(); err != nil {
@@ -438,6 +448,90 @@ func (h *Harmony) Finalize(
 		"bn", header.Number,
 		"engine", header.EngineInfo.String(),
 		"root", header.Root.String())
+}
+
+func (h *Harmony) applyProposalTx(txs []*types.Transaction, header *types.Header, config *params.ChainConfig) error {
+	var err error
+	for _, tx := range txs {
+		if tx.Type() >= types.ProposalTxType && tx.Type() <= types.ApproveProposalTxType {
+			err = h.ApplyProposalTx(tx, header, config)
+		}
+	}
+	return err
+}
+
+func in(target common.Address, str_array []common.Address) bool {
+	for _, element := range str_array {
+		if target == element {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, config *params.ChainConfig) error {
+	if tx.Type() == types.ProposalTxType { //提案交易
+		//取出全局参数
+		globalParams, err := getParams(h)
+
+		if err != nil {
+			return err
+		}
+		if globalParams.HashMap[tx.Hash()] != "" { //说明交易本次已经处理过，是二次广播来的交易
+			return nil
+		}
+		log.Info("got ProposalTxType")
+		len := len(globalParams.ValidProposals) + len(globalParams.InValidProposals)
+		id := fmt.Sprintf("%s.%d", params.Version, len)
+		globalParams.ValidProposals[id] = tx.Hash()
+		globalParams.HashMap[tx.Hash()] = id //表示已经被处理，这里要提出第二次广播又进来的交易
+
+		globalParams.ProposalEpoch[id] = header.Time / epochInterval ///当前的epoch
+
+		data, err := json.Marshal(globalParams)
+		if err != nil {
+			return errMarshalError
+		}
+		//写回rawdb
+		rawdb.WriteParams(h.GetDB(), globalParamsKey, data)
+	}
+	if tx.Type() == types.ApproveProposalTxType { //表决交易--仅仅将授权放入，具体处理在选举中
+		//取出全局参数
+		globalParams, err := getParams(h)
+		if err != nil {
+			return err
+		}
+
+		validators, _ := h.Ctx().GetValidators()
+		id := string(tx.Data())
+
+		if _, ok := globalParams.ValidProposals[id]; ok { // 存在有效提案
+			curEpoch := header.Time / epochInterval //查看当前id是否过期
+			validCnt := globalParams.ProposalValidEpochCnt
+
+			if curEpoch <= globalParams.ProposalEpoch[id]+validCnt {
+				//找到tx的from地址
+				msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+				if err != nil {
+					return err
+				}
+
+				result := in(msg.From(), validators) //交易的from是否是验证者地址
+				if result == false {
+					return errInvalidSign
+				}
+				globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
+			}
+		}
+		data, err := json.Marshal(globalParams)
+		if err != nil {
+			return errMarshalError
+		}
+
+		//写回rawdb
+		rawdb.WriteParams(h.GetDB(), globalParamsKey, data)
+	}
+	return nil
 }
 
 func (h *Harmony) applyVoteTxs(txs []*types.Transaction) {

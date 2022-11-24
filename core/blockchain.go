@@ -18,10 +18,8 @@
 package core
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"io"
 	"math/big"
 	"sort"
@@ -123,8 +121,6 @@ const (
 )
 
 var (
-	errInvalidSign                = errors.New("tx is not sign by valid validator")
-	errMarshalError               = errors.New("marshal error")
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 )
@@ -1753,8 +1749,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 			// Only count canonical blocks for GC processing time
 			bc.gcproc += proctime
-			//监听网络上来到的提案交易
-			ListernProposalTx(bc, block.Transactions(), block.Time(), block.Number(), block.BaseFee())
+
 		case SideStatTy:
 			log.Debug("Inserted forked block", "number", block.Number(), "hash", block.Hash(),
 				"diff", block.Difficulty(), "elapsed", common.PrettyDuration(time.Since(start)),
@@ -1788,96 +1783,6 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 	stats.ignored += it.remaining()
 
 	return it.index, err
-}
-
-func getParams(engine *harmony.Harmony) (types.GlobalParams, error) {
-	globalParams := types.GlobalParams{}
-	g := rawdb.ReadParams(engine.GetDB())
-
-	err := json.Unmarshal(g, &globalParams)
-	if err != nil {
-		log.Error("Unmarshal,", "err", err)
-	}
-	log.Info("get ", "globalParams", globalParams)
-	return globalParams, err
-}
-
-func in(target common.Address, str_array []common.Address) bool {
-	for _, element := range str_array {
-		if target == element {
-			return true
-		}
-	}
-	return false
-}
-
-func ListernProposalTx(bc *BlockChain, txs []*types.Transaction, blockTime uint64, blockNumer *big.Int, baseFee *big.Int) error {
-	if engine, ok := bc.engine.(*harmony.Harmony); ok {
-		for _, tx := range txs {
-			if tx.Type() == types.ProposalTxType { //提案交易
-				//取出全局参数
-				globalParams, err := getParams(engine)
-
-				if err != nil {
-					return err
-				}
-				if globalParams.HashMap[tx.Hash()] != "" { //说明交易本次已经处理过，是二次广播来的交易
-					return nil
-				}
-				log.Info("got ProposalTxType")
-				len := len(globalParams.ValidProposals) + len(globalParams.InValidProposals)
-				id := fmt.Sprintf("%s.%d", params.Version, len)
-				globalParams.ValidProposals[id] = tx.Hash()
-				globalParams.HashMap[tx.Hash()] = id //表示已经被处理，这里要提出第二次广播又进来的交易
-
-				globalParams.ProposalEpoch[id] = blockTime / epochInterval ///当前的epoch
-
-				data, err := json.Marshal(globalParams)
-				if err != nil {
-					return errMarshalError
-				}
-				//写回rawdb
-				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
-			}
-			if tx.Type() == types.ApproveProposalTxType { //表决交易--仅仅将授权放入，具体处理在选举中
-				//取出全局参数
-				globalParams, err := getParams(engine)
-				if err != nil {
-					return err
-				}
-
-				validators, _ := engine.Ctx().GetValidators()
-				id := string(tx.Data())
-
-				if _, ok := globalParams.ValidProposals[id]; ok { // 存在有效提案
-					curEpoch := blockTime / epochInterval //查看当前id是否过期
-					validCnt := globalParams.ProposalValidEpochCnt
-
-					if curEpoch <= globalParams.ProposalEpoch[id]+validCnt {
-						//找到tx的from地址
-						msg, err := tx.AsMessage(types.MakeSigner(bc.chainConfig, blockNumer), baseFee)
-						if err != nil {
-							return err
-						}
-
-						result := in(msg.From(), validators) //交易的from是否是验证者地址
-						if result == false {
-							return errInvalidSign
-						}
-						globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
-					}
-				}
-				data, err := json.Marshal(globalParams)
-				if err != nil {
-					return errMarshalError
-				}
-
-				//写回rawdb
-				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
-			}
-		}
-	}
-	return nil
 }
 
 // insertSideChain is called when an import batch hits upon a pruned ancestor

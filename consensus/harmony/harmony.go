@@ -40,8 +40,9 @@ const (
 )
 
 var (
-	errInvalidSign  = errors.New("tx is not sign by valid validator")
-	errMarshalError = errors.New("marshal error")
+	errInvalidSign     = errors.New("tx is not sign by valid validator")
+	errMarshalError    = errors.New("marshal error")
+	errNoValidProError = errors.New("no valid proposal")
 )
 
 var (
@@ -522,6 +523,8 @@ func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, c
 				}
 				globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
 			}
+		} else { //没有有效交易
+			return errNoValidProError
 		}
 		data, err := json.Marshal(globalParams)
 		if err != nil {

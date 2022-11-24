@@ -261,7 +261,6 @@ func getParams(engine *Harmony) (types.GlobalParams, error) {
 	if err != nil {
 		log.Error("Unmarshal,", "err", err)
 	}
-	log.Info("get ", "globalParams", globalParams)
 	return globalParams, err
 
 }

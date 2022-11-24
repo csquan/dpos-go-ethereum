@@ -1808,7 +1808,6 @@ func (s *TransactionAPI) GetGlobalParams(ctx context.Context) error {
 	if err != nil {
 		log.Error("Unmarshal,", "err", err)
 	}
-	log.Info("get ", "globalParams", gp)
 
 	return nil
 }
@@ -1822,8 +1821,7 @@ func (s *TransactionAPI) GetPrposalID(ctx context.Context, hash common.Hash) str
 	if err != nil {
 		log.Error("Unmarshal,", "err", err)
 	}
-	log.Info("get ", "globalParams", gp)
-	
+
 	return gp.HashMap[hash]
 }
 

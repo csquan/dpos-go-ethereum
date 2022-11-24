@@ -228,35 +228,20 @@ func approveProposal(engine *Harmony, currentEpoch uint64) error {
 	}
 
 	for id, _ := range globalParams.ValidProposals {
-		validCnt := globalParams.ProposalValidEpochCnt
+		hash := globalParams.ValidProposals[id]
 
-		if currentEpoch <= globalParams.ProposalEpoch[id]+validCnt { //查看当前id是否过期
-			hash := globalParams.ValidProposals[id]
-
-			proposalTx := GetTransaction(engine.db, hash)
-			if proposalTx == nil {
-				log.Info("In approveProposal", "can not find tx of hash:", hash)
-				continue
-			}
-			validators, err := engine.Ctx().GetValidators() //实时得到当前的见证人
-			if err != nil {
-				return fmt.Errorf("failed to get validator: %s", err)
-			}
-			threshold := len(validators)/2 + 1 // 这里门槛的设置需要再考虑
-			err = globalParams.ApplyProposals(id, proposalTx, threshold)
-			if err == nil { //表示执行成功
-				data, err := json.Marshal(globalParams)
-				if err != nil {
-					return err
-				}
-				//写回rawdb
-				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
-			}
-		} else { //过期了-移动id到invalid中
-			//将ID在ValidProposals中删除，同时移动到InValidProposals中
-			globalParams.InValidProposals[id] = globalParams.ValidProposals[id]
-			delete(globalParams.ValidProposals, id)
-
+		proposalTx := GetTransaction(engine.db, hash)
+		if proposalTx == nil {
+			log.Info("In approveProposal", "can not find tx of hash:", hash)
+			continue
+		}
+		validators, err := engine.Ctx().GetValidators() //实时得到当前的见证人
+		if err != nil {
+			return fmt.Errorf("failed to get validator: %s", err)
+		}
+		threshold := len(validators)/2 + 1 // 这里门槛的设置需要再考虑
+		err = globalParams.ApplyProposals(id, proposalTx, threshold)
+		if err == nil { //表示执行成功
 			data, err := json.Marshal(globalParams)
 			if err != nil {
 				return err

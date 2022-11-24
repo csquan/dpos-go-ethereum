@@ -427,6 +427,14 @@ func (g *Genesis) Commit(db ethdb.Database) (*types.Block, error) {
 	}
 	rawdb.WriteParams(db, globalParamsKey, data)
 
+	globalParams := types.GlobalParams{}
+	gdata := rawdb.ReadParams(db)
+
+	err = json.Unmarshal(gdata, &globalParams)
+	if err != nil {
+		log.Error("Unmarshal,", "err", err)
+	}
+
 	rawdb.WriteTd(db, block.Hash(), block.NumberU64(), block.Difficulty())
 	rawdb.WriteBlock(db, block)
 	rawdb.WriteReceipts(db, block.Hash(), block.NumberU64(), nil)

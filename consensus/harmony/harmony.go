@@ -43,6 +43,7 @@ var (
 	errInvalidSign     = errors.New("tx is not sign by valid validator")
 	errMarshalError    = errors.New("marshal error")
 	errNoValidProError = errors.New("no valid proposal")
+	errApporvalError   = errors.New("approval can only use once in 3 epoch")
 )
 
 var (
@@ -521,7 +522,19 @@ func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, c
 				if result == false {
 					return errInvalidSign
 				}
-				globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
+				//限制授权地址的使用，先从ApproveMap找到msg.From()
+				if _, ok := globalParams.ApproveMap[msg.From().String()]; ok {
+					lastApprovalEpoch := globalParams.ApproveMap[msg.From().String()]
+					if curEpoch > lastApprovalEpoch+3 { //在判断离上次授权是否经过了3个epoch
+						globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
+						globalParams.ApproveMap[msg.From().String()] = curEpoch
+					} else {
+						return errApporvalError
+					}
+				} else { //不存在-直接授权
+					globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
+					globalParams.ApproveMap[msg.From().String()] = curEpoch
+				}
 			}
 		} else { //没有有效交易
 			return errNoValidProError

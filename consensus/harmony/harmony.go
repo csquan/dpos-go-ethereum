@@ -429,13 +429,6 @@ func (h *Harmony) Finalize(
 		log.Error("got error when elect next epoch,", "err", err)
 	}
 
-	// apply vote txs here, these tx is no reason to fail, no err no revert needed
-	h.applyVoteTxs(txs)
-	//apply proposal txs here,these tx is no reason to fail, no err no revert needed
-	err = h.applyProposalTx(txs, header, chain.Config())
-	if err != nil {
-		log.Error("applyProposalTx error", "err", err)
-	}
 	//update mint count trie
 	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
 	if header.EngineInfo, err = h.ctx.Commit(); err != nil {
@@ -452,16 +445,6 @@ func (h *Harmony) Finalize(
 		"root", header.Root.String())
 }
 
-func (h *Harmony) applyProposalTx(txs []*types.Transaction, header *types.Header, config *params.ChainConfig) error {
-	var err error
-	for _, tx := range txs {
-		if tx.Type() >= types.ProposalTxType && tx.Type() <= types.ApproveProposalTxType {
-			err = h.ApplyProposalTx(tx, header, config)
-		}
-	}
-	return err
-}
-
 func in(target common.Address, str_array []common.Address) bool {
 	for _, element := range str_array {
 		if target == element {
@@ -471,7 +454,7 @@ func in(target common.Address, str_array []common.Address) bool {
 	return false
 }
 
-func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, config *params.ChainConfig) error {
+func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, signer types.Signer) error {
 	if tx.Type() == types.ProposalTxType { //提案交易
 		//取出全局参数
 		globalParams, err := getParams(h)
@@ -513,7 +496,7 @@ func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, c
 
 			if curEpoch <= globalParams.ProposalEpoch[id]+validCnt {
 				//找到tx的from地址
-				msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
+				msg, err := tx.AsMessage(signer, header.BaseFee)
 				if err != nil {
 					return err
 				}
@@ -550,15 +533,7 @@ func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, c
 	return nil
 }
 
-func (h *Harmony) applyVoteTxs(txs []*types.Transaction) {
-	for _, tx := range txs {
-		if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnDelegateTxType {
-			_ = h.ApplyVoteTx(tx)
-		}
-	}
-}
-
-func (h *Harmony) ApplyVoteTx(tx *types.Transaction) error {
+func (h *Harmony) ApplyHarmonyTx(tx *types.Transaction, header *types.Header) error {
 	from, err := types.Sender(h.txSigner, tx)
 	if err != nil {
 		log.Warn("get sender", "err", err)
@@ -584,6 +559,12 @@ func (h *Harmony) ApplyVoteTx(tx *types.Transaction) error {
 			log.Warn("leave delegating", "err", err)
 			return err
 		}
+	case types.ProposalTxType, types.ApproveProposalTxType:
+		if err = h.ApplyProposalTx(tx, header, h.txSigner); err != nil {
+			log.Warn("leave Proposal", "err", err)
+			return err
+		}
+
 	}
 	return nil
 }

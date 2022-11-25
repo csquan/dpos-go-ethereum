@@ -98,5 +98,5 @@ var (
 	ErrSenderNoEOA = errors.New("sender not an eoa")
 
 	// ErrVoteTx is some vote tx error.
-	ErrVoteTx = errors.New("vote tx error")
+	ErrHarmonyTx = errors.New("harmony tx error")
 )

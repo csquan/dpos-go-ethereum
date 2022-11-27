@@ -19,7 +19,6 @@ package forkid
 import (
 	"bytes"
 	"math"
-	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -31,7 +30,6 @@ import (
 // the correct fork ID.
 func TestCreation(t *testing.T) {
 	mergeConfig := *params.MainnetChainConfig
-	mergeConfig.MergeNetsplitBlock = big.NewInt(18000000)
 	type testcase struct {
 		head uint64
 		want ID
@@ -101,9 +99,8 @@ func TestCreation(t *testing.T) {
 		},
 		// Rinkeby test cases
 		{
-			params.RinkebyChainConfig,
-			params.RinkebyGenesisHash,
-			[]testcase{
+			params.MainnetChainConfig,
+			params.MainnetGenesisHash,			[]testcase{
 				{0, ID{Hash: checksumToBytes(0x3b8e0691), Next: 1}},             // Unsynced, last Frontier block
 				{1, ID{Hash: checksumToBytes(0x60949295), Next: 2}},             // First and last Homestead block
 				{2, ID{Hash: checksumToBytes(0x8bde40dd), Next: 3}},             // First and last Tangerine block
@@ -125,9 +122,8 @@ func TestCreation(t *testing.T) {
 		},
 		// Goerli test cases
 		{
-			params.GoerliChainConfig,
-			params.GoerliGenesisHash,
-			[]testcase{
+			params.MainnetChainConfig,
+			params.MainnetGenesisHash,			[]testcase{
 				{0, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}},       // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople and first Petersburg block
 				{1561650, ID{Hash: checksumToBytes(0xa3f5ab08), Next: 1561651}}, // Last Petersburg block
 				{1561651, ID{Hash: checksumToBytes(0xc25efa5c), Next: 4460644}}, // First Istanbul block
@@ -140,9 +136,8 @@ func TestCreation(t *testing.T) {
 		},
 		// Sepolia test cases
 		{
-			params.SepoliaChainConfig,
-			params.SepoliaGenesisHash,
-			[]testcase{
+			params.MainnetChainConfig,
+			params.MainnetGenesisHash,			[]testcase{
 				{0, ID{Hash: checksumToBytes(0xfe3366e7), Next: 1735371}},       // Unsynced, last Frontier, Homestead, Tangerine, Spurious, Byzantium, Constantinople, Petersburg, Istanbul, Berlin and first London block
 				{1735370, ID{Hash: checksumToBytes(0xfe3366e7), Next: 1735371}}, // Last London block
 				{1735371, ID{Hash: checksumToBytes(0xb96cbd13), Next: 0}},       // First MergeNetsplit block

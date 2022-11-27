@@ -230,7 +230,7 @@ func approveProposal(engine *Harmony, currentEpoch uint64) error {
 	for id, _ := range globalParams.ValidProposals {
 		validCnt := globalParams.ProposalValidEpochCnt
 
-		if currentEpoch <= globalParams.ProposalEpoch[id]+validCnt { //查看当前id是否过期
+		if currentEpoch <= globalParams.ProposalEpoch[id]+validCnt+1 { //查看当前id是否过期
 			hash := globalParams.ValidProposals[id]
 
 			proposalTx := GetTransaction(engine.db, hash)
@@ -252,17 +252,19 @@ func approveProposal(engine *Harmony, currentEpoch uint64) error {
 				//写回rawdb
 				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
 			}
-		} else { //过期了-移动id到invalid中
-			//将ID在ValidProposals中删除，同时移动到InValidProposals中
-			globalParams.InValidProposals[id] = globalParams.ValidProposals[id]
-			delete(globalParams.ValidProposals, id)
+			if currentEpoch == globalParams.ProposalEpoch[id]+validCnt+1 { //移动到invalid-确保没有足够授权，但是到了最后截止日子能移动到invalid
+				//过期了-移动id到invalid中
+				//将ID在ValidProposals中删除，同时移动到InValidProposals中
+				globalParams.InValidProposals[id] = globalParams.ValidProposals[id]
+				delete(globalParams.ValidProposals, id)
 
-			data, err := json.Marshal(globalParams)
-			if err != nil {
-				return err
+				data, err := json.Marshal(globalParams)
+				if err != nil {
+					return err
+				}
+				//写回rawdb
+				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
 			}
-			//写回rawdb
-			rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
 		}
 	}
 	return nil
@@ -276,7 +278,6 @@ func getParams(engine *Harmony) (types.GlobalParams, error) {
 	if err != nil {
 		log.Error("Unmarshal,", "err", err)
 	}
-	log.Info("get ", "globalParams", globalParams)
 	return globalParams, err
 
 }

@@ -55,7 +55,7 @@ func BenchmarkFilters(b *testing.B) {
 			Alloc:   core.GenesisAlloc{addr1: {Balance: big.NewInt(1000000)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		genesis = gspec.ToBlock()
+		genesis = gspec.ToBlock(nil)
 	)
 	defer db.Close()
 
@@ -117,7 +117,7 @@ func TestFilters(t *testing.T) {
 			Alloc:   core.GenesisAlloc{addr: {Balance: big.NewInt(1000000)}},
 			BaseFee: big.NewInt(params.InitialBaseFee),
 		}
-		genesis = gspec.ToBlock()
+		genesis = gspec.ToBlock(nil)
 	)
 	defer db.Close()
 

@@ -167,7 +167,7 @@ func TestGenesisHashes(t *testing.T) {
 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 		// Test via ToBlock
-		if have := c.genesis.ToBlock().Hash(); have != c.want {
+		if have := c.genesis.ToBlock(nil).Hash(); have != c.want {
 			t.Errorf("case: %d a), want: %s, got: %s", i, c.want.Hex(), have.Hex())
 		}
 	}

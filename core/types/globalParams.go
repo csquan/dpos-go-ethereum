@@ -39,6 +39,8 @@ type GlobalParams struct {
 
 	//记录每个提案对应的epochID
 	ProposalEpoch map[string]uint64 "json:proposalEpoch" //id->epoch
+	//限制每个地址对应的授权
+	ApproveMap map[string]uint64 "json:approveMap" //addr-epoch
 }
 
 var (
@@ -55,6 +57,8 @@ func (g *GlobalParams) InitParams() {
 	g.InValidProposals = make(map[string]common.Hash) //id->hash
 
 	g.ProposalEpoch = make(map[string]uint64) //id->epoch
+	g.ApproveMap = make(map[string]uint64)    //addr->epoch
+
 	g.HashMap = make(map[common.Hash]string)
 }
 
@@ -79,7 +83,7 @@ func (g *GlobalParams) ApplyProposals(id string, proposalTx *Transaction, thresh
 		value := gjson.Parse(json).Get("value")
 
 		if name.String() == "frontierBlockReward" {
-			log.Warn("modify params", " name:", name.String(), " value:", value.String())
+			log.Info("modify params", " name:", name.String(), " value:", value.String())
 			g.FrontierBlockReward.SetString(value.String(), 10)
 
 			//将ID在ValidProposals中删除，同时移动到InValidProposals中
@@ -87,7 +91,7 @@ func (g *GlobalParams) ApplyProposals(id string, proposalTx *Transaction, thresh
 			delete(g.ValidProposals, id)
 			return nil
 		} else if name.String() == "proposalValidEpochCnt" {
-			log.Warn("modify params", " name:", name.String(), " value:", value.String())
+			log.Info("modify params", " name:", name.String(), " value:", value.String())
 			g.ProposalValidEpochCnt = uint64(value.Int())
 
 			//将ID在ValidProposals中删除，同时移动到InValidProposals中

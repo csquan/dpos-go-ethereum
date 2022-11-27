@@ -17,10 +17,8 @@
 package miner
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -83,13 +81,9 @@ const (
 )
 
 var (
-	errInvalidSign                = errors.New("tx is not sign by valid validator")
-	errMarshalError               = errors.New("marshal error")
 	errBlockInterruptedByNewHead  = errors.New("new head arrived while building block")
 	errBlockInterruptedByRecommit = errors.New("recommit interrupt while building block")
 )
-
-var globalParamsKey = []byte("hui chan global params")
 
 // environment is the worker's current environment and holds all
 // information of the sealing block generation.
@@ -705,12 +699,13 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	var receipt *types.Receipt
 	ha, ok := w.engine.(*harmony.Harmony)
 	if ok {
-		err = ha.ApplyVoteTx(tx)
+		err = ha.ApplyHarmonyTx(tx, w.chain.CurrentHeader())
 	}
+
 	if err == nil {
 		receipt, err = core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	} else {
-		err = core.ErrVoteTx
+		err = core.ErrHarmonyTx
 	}
 
 	harmonySnap := ha.Ctx().Snapshot()
@@ -771,9 +766,9 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 		logs, err := w.commitTransaction(env, tx)
 		switch {
-		case errors.Is(err, core.ErrVoteTx):
+		case errors.Is(err, core.ErrHarmonyTx):
 			log.Trace("some vote tx error")
-			txs.Shift()
+			txs.Pop()
 
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -984,97 +979,6 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	w.current = work
 }
 
-func in(target common.Address, str_array []common.Address) bool {
-	for _, element := range str_array {
-		if target == element {
-			return true
-		}
-	}
-	return false
-}
-
-func getParams(engine *harmony.Harmony) (types.GlobalParams, error) {
-	globalParams := types.GlobalParams{}
-	g := rawdb.ReadParams(engine.GetDB())
-
-	err := json.Unmarshal(g, &globalParams)
-	if err != nil {
-		log.Error("Unmarshal,", "err", err)
-	}
-	log.Info("get ", "globalParams", globalParams)
-	return globalParams, err
-
-}
-
-func applyProposalTx(w *worker, env *environment) error {
-	if engine, ok := w.engine.(*harmony.Harmony); ok {
-		for _, tx := range env.txs {
-			if tx.Type() == types.ProposalTxType { //提案交易
-				//取出全局参数
-				globalParams, err := getParams(engine)
-
-				if err != nil {
-					return err
-				}
-				if globalParams.HashMap[tx.Hash()] != "" { //说明交易本次已经处理过，是二次广播来的交易
-					return nil
-				}
-				log.Info("got ProposalTxType")
-				len := len(globalParams.ValidProposals) + len(globalParams.InValidProposals)
-				id := fmt.Sprintf("%s.%d", params.Version, len)
-				globalParams.ValidProposals[id] = tx.Hash()
-				globalParams.HashMap[tx.Hash()] = id //表示已经被处理，这里要提出第二次广播又进来的交易
-
-				globalParams.ProposalEpoch[id] = env.header.Time / epochInterval ///当前的epoch
-
-				data, err := json.Marshal(globalParams)
-				if err != nil {
-					return errMarshalError
-				}
-				//写回rawdb
-				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
-			}
-			if tx.Type() == types.ApproveProposalTxType { //表决交易--仅仅将授权放入，具体处理在选举中
-				//取出全局参数
-				globalParams, err := getParams(engine)
-				if err != nil {
-					return err
-				}
-
-				validators, _ := engine.Ctx().GetValidators()
-				id := string(tx.Data())
-
-				if _, ok := globalParams.ValidProposals[id]; ok { // 存在有效提案
-					curEpoch := env.header.Time / epochInterval //查看当前id是否过期
-					validCnt := globalParams.ProposalValidEpochCnt
-
-					if curEpoch <= globalParams.ProposalEpoch[id]+validCnt {
-						//找到tx的from地址
-						msg, err := tx.AsMessage(types.MakeSigner(w.chainConfig, env.header.Number), env.header.BaseFee)
-						if err != nil {
-							return err
-						}
-
-						result := in(msg.From(), validators) //交易的from是否是验证者地址
-						if result == false {
-							return errInvalidSign
-						}
-						globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
-					}
-				}
-				data, err := json.Marshal(globalParams)
-				if err != nil {
-					return errMarshalError
-				}
-
-				//写回rawdb
-				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
-			}
-		}
-	}
-	return nil
-}
-
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 // Note the assumption is held that the mutation is allowed to the passed env, do
@@ -1082,12 +986,6 @@ func applyProposalTx(w *worker, env *environment) error {
 func (w *worker) commit(env *environment, interval func(), update bool, start time.Time) error {
 	run := func() error {
 		env := env.copy()
-
-		err := applyProposalTx(w, env) //提案交易
-		if err != nil {
-			log.Error("applyProposalTx error", "err", err)
-			return err
-		}
 
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {

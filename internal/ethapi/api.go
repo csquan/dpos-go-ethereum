@@ -1799,7 +1799,7 @@ func (s *TransactionAPI) FillTransaction(ctx context.Context, args TransactionAr
 	return &SignTransactionResult{data, tx}, nil
 }
 
-func (s *TransactionAPI) GetGlobalParams(ctx context.Context) error {
+func (s *TransactionAPI) GetGlobalParams(ctx context.Context) *types.GlobalParams {
 	// Set some sanity defaults and terminate on failure
 	gp := types.GlobalParams{}
 	g := rawdb.ReadParams(s.b.ChainDb())
@@ -1808,9 +1808,8 @@ func (s *TransactionAPI) GetGlobalParams(ctx context.Context) error {
 	if err != nil {
 		log.Error("Unmarshal,", "err", err)
 	}
-	log.Info("get ", "globalParams", gp)
 
-	return nil
+	return &gp
 }
 
 func (s *TransactionAPI) GetPrposalID(ctx context.Context, hash common.Hash) string {
@@ -1822,8 +1821,7 @@ func (s *TransactionAPI) GetPrposalID(ctx context.Context, hash common.Hash) str
 	if err != nil {
 		log.Error("Unmarshal,", "err", err)
 	}
-	log.Info("get ", "globalParams", gp)
-	
+
 	return gp.HashMap[hash]
 }
 

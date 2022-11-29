@@ -857,6 +857,12 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		}
 		timestamp = parent.Time() + 1
 	}
+	// this will ensure we're not going off too far in the future
+	if now := time.Now().Unix(); int64(timestamp) > now+1 {
+		wait := time.Duration(int64(timestamp)-now) * time.Second
+		log.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
+		time.Sleep(wait)
+	}
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number()
 	header := &types.Header{

@@ -699,13 +699,12 @@ func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*
 	var receipt *types.Receipt
 	ha, ok := w.engine.(*harmony.Harmony)
 	if ok {
-		err = ha.ApplyHarmonyTx(tx, w.chain.CurrentHeader())
+		err = ha.ApplyVoteTx(tx)
 	}
-
 	if err == nil {
 		receipt, err = core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 	} else {
-		err = core.ErrHarmonyTx
+		err = core.ErrVoteTx
 	}
 
 	harmonySnap := ha.Ctx().Snapshot()
@@ -766,9 +765,9 @@ func (w *worker) commitTransactions(env *environment, txs *types.TransactionsByP
 
 		logs, err := w.commitTransaction(env, tx)
 		switch {
-		case errors.Is(err, core.ErrHarmonyTx):
+		case errors.Is(err, core.ErrVoteTx):
 			log.Trace("some vote tx error")
-			txs.Pop()
+			txs.Shift()
 
 		case errors.Is(err, core.ErrGasLimitReached):
 			// Pop the current out-of-gas transaction without shifting in the next from the account

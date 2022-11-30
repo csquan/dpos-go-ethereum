@@ -567,22 +567,22 @@ func (h *Harmony) ApplyVoteTx(tx *types.Transaction) error {
 	case types.CandidateTxType:
 		if err = h.Ctx().BecomeCandidate(from); err != nil {
 			log.Warn("become candidate", "err", err)
-			return err
+			//return err
 		}
 	case types.UnCandidateTxType:
 		if err = h.Ctx().KickOutCandidate(from); err != nil {
 			log.Warn("leave candidate", "err", err)
-			return err
+			//return err
 		}
 	case types.DelegateTxType:
 		if err = h.Ctx().Delegate(from, *tx.To()); err != nil {
 			log.Warn("delegating", "err", err)
-			return err
+			//return err
 		}
 	case types.UnDelegateTxType:
 		if err = h.Ctx().UnDelegate(from, *tx.To()); err != nil {
 			log.Warn("leave delegating", "err", err)
-			return err
+			//return err
 		}
 	}
 	return nil

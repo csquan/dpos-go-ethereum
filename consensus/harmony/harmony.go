@@ -32,7 +32,7 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inMemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	blockInterval    = uint64(2)
+	blockInterval    = uint64(3)
 	epochInterval    = uint64(600)
 	maxValidatorSize = 5
 	safeSize         = maxValidatorSize*2/3 + 1
@@ -78,6 +78,7 @@ var (
 	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
 	ErrInvalidBlockValidator      = errors.New("not my turn")
 	ErrInvalidMintBlockTime       = errors.New("not mining time")
+	ErrTakeItEasy                 = errors.New("take it easy")
 	ErrNilBlockHeader             = errors.New("nil block header returned")
 )
 var (
@@ -431,12 +432,12 @@ func (h *Harmony) Finalize(
 
 	// apply vote txs here, these tx is no reason to fail, no err no revert needed
 	h.applyVoteTxs(txs)
-	//apply proposal txs here,these tx is no reason to fail, no err no revert needed
+	// apply proposal txs here,these tx is no reason to fail, no err no revert needed
 	err = h.applyProposalTx(txs, header, chain.Config())
 	if err != nil {
 		log.Error("applyProposalTx error", "err", err)
 	}
-	//update mint count trie
+	// update mint count trie
 	updateMintCnt(parent.Time, header.Time, header.Coinbase, h.ctx)
 	if header.EngineInfo, err = h.ctx.Commit(); err != nil {
 		log.Error("engine context commit", "err", err)
@@ -472,33 +473,33 @@ func in(target common.Address, str_array []common.Address) bool {
 }
 
 func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, config *params.ChainConfig) error {
-	if tx.Type() == types.ProposalTxType { //提案交易
-		//取出全局参数
+	if tx.Type() == types.ProposalTxType { // 提案交易
+		// 取出全局参数
 		globalParams, err := getParams(h)
 
 		if err != nil {
 			return err
 		}
-		if globalParams.HashMap[tx.Hash()] != "" { //说明交易本次已经处理过，是二次广播来的交易
+		if globalParams.HashMap[tx.Hash()] != "" { // 说明交易本次已经处理过，是二次广播来的交易
 			return nil
 		}
 		log.Info("got ProposalTxType")
 		len := len(globalParams.ValidProposals) + len(globalParams.InValidProposals)
 		id := fmt.Sprintf("%s.%d", params.Version, len)
 		globalParams.ValidProposals[id] = tx.Hash()
-		globalParams.HashMap[tx.Hash()] = id //表示已经被处理，这里要提出第二次广播又进来的交易
+		globalParams.HashMap[tx.Hash()] = id // 表示已经被处理，这里要提出第二次广播又进来的交易
 
-		globalParams.ProposalEpoch[id] = header.Time / epochInterval ///当前的epoch
+		globalParams.ProposalEpoch[id] = header.Time / epochInterval // /当前的epoch
 
 		data, err := json.Marshal(globalParams)
 		if err != nil {
 			return errMarshalError
 		}
-		//写回rawdb
+		// 写回rawdb
 		rawdb.WriteParams(h.GetDB(), globalParamsKey, data)
 	}
-	if tx.Type() == types.ApproveProposalTxType { //表决交易--仅仅将授权放入，具体处理在选举中
-		//取出全局参数
+	if tx.Type() == types.ApproveProposalTxType { // 表决交易--仅仅将授权放入，具体处理在选举中
+		// 取出全局参数
 		globalParams, err := getParams(h)
 		if err != nil {
 			return err
@@ -508,35 +509,35 @@ func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, c
 		id := string(tx.Data())
 
 		if _, ok := globalParams.ValidProposals[id]; ok { // 存在有效提案
-			curEpoch := header.Time / epochInterval //查看当前id是否过期
+			curEpoch := header.Time / epochInterval // 查看当前id是否过期
 			validCnt := globalParams.ProposalValidEpochCnt
 
 			if curEpoch <= globalParams.ProposalEpoch[id]+validCnt {
-				//找到tx的from地址
+				// 找到tx的from地址
 				msg, err := tx.AsMessage(types.MakeSigner(config, header.Number), header.BaseFee)
 				if err != nil {
 					return err
 				}
 
-				result := in(msg.From(), validators) //交易的from是否是验证者地址
+				result := in(msg.From(), validators) // 交易的from是否是验证者地址
 				if result == false {
 					return errInvalidSign
 				}
-				//限制授权地址的使用，先从ApproveMap找到msg.From()
+				// 限制授权地址的使用，先从ApproveMap找到msg.From()
 				if _, ok := globalParams.ApproveMap[msg.From().String()]; ok {
 					lastApprovalEpoch := globalParams.ApproveMap[msg.From().String()]
-					if curEpoch > lastApprovalEpoch+3 { //在判断离上次授权是否经过了3个epoch
+					if curEpoch > lastApprovalEpoch+3 { // 在判断离上次授权是否经过了3个epoch
 						globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
 						globalParams.ApproveMap[msg.From().String()] = curEpoch
 					} else {
 						return errApporvalError
 					}
-				} else { //不存在-直接授权
+				} else { // 不存在-直接授权
 					globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
 					globalParams.ApproveMap[msg.From().String()] = curEpoch
 				}
 			}
-		} else { //没有有效交易
+		} else { // 没有有效交易
 			return errNoValidProError
 		}
 		data, err := json.Marshal(globalParams)
@@ -544,7 +545,7 @@ func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, c
 			return errMarshalError
 		}
 
-		//写回rawdb
+		// 写回rawdb
 		rawdb.WriteParams(h.GetDB(), globalParamsKey, data)
 	}
 	return nil
@@ -591,7 +592,7 @@ func (h *Harmony) ApplyVoteTx(tx *types.Transaction) error {
 func (h *Harmony) checkDeadline(lastBlock *types.Block, now uint64) error {
 	prevSlotTime := prevSlot(now)
 	nextSlotTime := nextSlot(now)
-	log.Debug("checkDeadLine", "lastBlock", lastBlock.Time(), "now", now, "prev", prevSlotTime, "next", nextSlotTime)
+	log.Trace("checkDeadLine", "lastBlock", lastBlock.Time(), "now", now, "prev", prevSlotTime, "next", nextSlotTime)
 	if lastBlock.Time() >= nextSlotTime {
 		return ErrMintFutureBlock
 	}
@@ -618,6 +619,9 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 	if (validator == common.Address{}) || !bytes.Equal(validator.Bytes(), h.signer.Bytes()) {
 		return ErrInvalidBlockValidator
 	}
+	if now-lastBlock.Time() < (blockInterval+1)/2 {
+		return ErrTakeItEasy
+	}
 	return nil
 }
 
@@ -629,8 +633,6 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	if number == 0 {
 		return errUnknownBlock
 	}
-	now := uint64(time.Now().Unix())
-	delay := nextSlot(now) - now
 
 	// time's up, sign the block
 	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(block.Header()).Bytes())
@@ -640,17 +642,13 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	}
 	copy(block.Header().Extra[len(block.Header().Extra)-extraSeal:], sealHash)
 
-	// Wait until sealing is terminated or delay timeout.
-	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
 	go func() {
 		select {
 		case <-stop:
 			return
-		case <-time.After(time.Duration(delay) * time.Second):
-		}
-
-		select {
 		case results <- block.WithSeal(block.Header()):
+			log.Warn("engine Sealed block broadcasting...", "bn", block.NumberU64(), "t", uint64(time.Now().Unix())-block.Time())
+			return
 		default:
 			log.Warn("Sealing result is not read by miner", "sealHash", sealHash)
 		}

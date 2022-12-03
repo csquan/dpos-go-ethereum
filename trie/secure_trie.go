@@ -18,7 +18,6 @@ package trie
 
 import (
 	"fmt"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -96,8 +95,7 @@ func (t *StateTrie) TryGetAccount(key []byte) (*types.StateAccount, error) {
 	var ret types.StateAccount
 	res, err := t.trie.TryGet(t.hashKey(key))
 	if err != nil {
-		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
-		return &ret, err
+		return nil, err
 	}
 	if res == nil {
 		return nil, nil

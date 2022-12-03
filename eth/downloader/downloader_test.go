@@ -1452,7 +1452,7 @@ func TestBeaconSync66Full(t *testing.T) { testBeaconSync(t, eth.ETH66, FullSync)
 func TestBeaconSync66Snap(t *testing.T) { testBeaconSync(t, eth.ETH66, SnapSync) }
 
 func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
-	//log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	// log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
 	var cases = []struct {
 		name  string // The name of testing scenario
@@ -1477,6 +1477,9 @@ func testBeaconSync(t *testing.T, protocol uint, mode SyncMode) {
 			// Build the local chain segment if it's required
 			if c.local > 0 {
 				tester.chain.InsertChain(chain.blocks[1 : c.local+1])
+			}
+			if err := tester.downloader.BeaconSync(mode, chain.blocks[len(chain.blocks)-1].Header()); err != nil {
+				t.Fatalf("Failed to beacon sync chain %v %v", c.name, err)
 			}
 			select {
 			case <-success:

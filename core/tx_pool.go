@@ -539,6 +539,9 @@ func (pool *TxPool) Pending(enforceTips bool) map[common.Address]types.Transacti
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 
+	if enforceTips {
+		log.Debug("getPendingTxs", "gasPrice", pool.gasPrice, "baseFee", pool.priced.urgent.baseFee)
+	}
 	pending := make(map[common.Address]types.Transactions)
 	for addr, list := range pool.pending {
 		txs := list.Flatten()

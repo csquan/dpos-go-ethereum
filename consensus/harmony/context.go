@@ -353,24 +353,6 @@ func (c *Context) GetValidators() ([]common.Address, error) {
 	return validators, nil
 }
 
-func (c *Context) GetDelegates() (map[common.Address]common.Address, error) {
-	delegates := map[common.Address]common.Address{}
-
-	ctxTrie := c.DelegateTrie()
-	iterDelegate := ctxTrie.Iterator(nil)
-	existDelegate := iterDelegate.Next()
-	if !existDelegate {
-		return delegates, errors.New("no delegates")
-	}
-	for existDelegate {
-		addr := iterDelegate.Key
-		candidate := iterDelegate.Value
-		delegates[common.BytesToAddress(addr)] = common.BytesToAddress(candidate)
-		existDelegate = iterDelegate.Next()
-	}
-	return delegates, nil
-}
-
 func (c *Context) SetValidators(validators []common.Address) error {
 	key := []byte("validator")
 	validatorsRLP, err := rlp.EncodeToBytes(validators)

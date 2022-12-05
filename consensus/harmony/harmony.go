@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/core/rawdb"
+	"io"
 	"math/big"
 	"sync"
 	"time"
@@ -223,7 +224,9 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if parent.Time+blockInterval > header.Time+1 {
 		return ErrInvalidTimestamp
 	}
-	return nil
+
+	//verify signer
+	return h.verifyBlockSeal(chain, header, nil)
 }
 
 func (h *Harmony) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
@@ -256,6 +259,18 @@ func (h *Harmony) VerifyUncles(chain consensus.ChainReader, block *types.Block) 
 // in the header satisfies the consensus protocol requirements.
 func (h *Harmony) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
 	return h.verifySeal(chain, header, nil)
+}
+
+func (h *Harmony) verifyBlockSeal(chain consensus.ChainHeaderReader, header *types.Header, headers []*types.Header) error {
+	// Verifying the genesis block is not supported
+	number := header.Number.Uint64()
+	if number == 0 {
+		return errUnknownBlock
+	}
+	if err := h.verifyBlockSigner(header.Coinbase, header); err != nil {
+		return err
+	}
+	return h.updateConfirmedBlockHeader(chain)
 }
 
 func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, headers []*types.Header) error {
@@ -621,9 +636,16 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 	return nil
 }
 
+func HarmonyRLP(header *types.Header) []byte {
+	b := new(bytes.Buffer)
+	encodeSigHeader(b, header)
+	return b.Bytes()
+}
+
 // Seal generates a new block for the given input block with the local miner's
 // seal place on top.
 func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+	header := block.Header()
 	number := block.Header().Number.Uint64()
 	// Sealing the genesis block is not supported
 	if number == 0 {
@@ -633,12 +655,12 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	delay := nextSlot(now) - now
 
 	// time's up, sign the block
-	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(block.Header()).Bytes())
+	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, accounts.MimetypeHarmony, HarmonyRLP(header))
 	if err != nil {
 		log.Error("signFn error", "err", err)
 		return nil
 	}
-	copy(block.Header().Extra[len(block.Header().Extra)-extraSeal:], sealHash)
+	copy(header.Extra[len(block.Header().Extra)-extraSeal:], sealHash)
 
 	// Wait until sealing is terminated or delay timeout.
 	log.Trace("Waiting for slot to sign and propagate", "delay", common.PrettyDuration(delay))
@@ -650,7 +672,9 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 		}
 
 		select {
-		case results <- block.WithSeal(block.Header()):
+		case results <- block.WithSeal(header):
+			log.Warn("engine Sealed block broadcasting...", "bn", block.NumberU64(), "t", uint64(time.Now().Unix())-block.Time())
+			return
 		default:
 			log.Warn("Sealing result is not read by miner", "sealHash", sealHash)
 		}
@@ -679,6 +703,40 @@ func (h *Harmony) Authorize(signer common.Address, signFn SignerFn) {
 	h.mu.Unlock()
 }
 
+func encodeSigHeader(w io.Writer, header *types.Header) {
+	enc := []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra[:len(header.Extra)-crypto.SignatureLength], // Yes, this will panic if extra is too short
+		header.MixDigest,
+		header.Nonce,
+	}
+	if header.BaseFee != nil {
+		enc = append(enc, header.BaseFee)
+	}
+	if err := rlp.Encode(w, enc); err != nil {
+		panic("can't encode: " + err.Error())
+	}
+}
+
+// SealHash returns the hash of a block prior to it being sealed.
+func SealHash(header *types.Header) (hash common.Hash) {
+	hasher := sha3.NewLegacyKeccak256()
+	encodeSigHeader(hasher, header)
+	hasher.(crypto.KeccakState).Read(hash[:])
+	return hash
+}
+
 // ecRecover extracts the Ethereum account address from a signed header.
 func ecRecover(header *types.Header, sigCache *lru.ARCCache) (common.Address, error) {
 	// If the signature's already cached, return that
@@ -692,7 +750,7 @@ func ecRecover(header *types.Header, sigCache *lru.ARCCache) (common.Address, er
 	}
 	signature := header.Extra[len(header.Extra)-extraSeal:]
 	// Recover the public key and the Ethereum address
-	pubKey, err := crypto.Ecrecover(sigHash(header).Bytes(), signature)
+	pubKey, err := crypto.Ecrecover(SealHash(header).Bytes(), signature)
 	if err != nil {
 		return common.Address{}, err
 	}

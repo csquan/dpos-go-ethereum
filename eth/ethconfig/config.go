@@ -88,7 +88,7 @@ var Defaults = Config{
 	Miner: miner.Config{
 		GasCeil:  90_000_000,
 		GasPrice: big.NewInt(params.GWei),
-		Recommit: 100 * time.Millisecond,
+		Recommit: 500 * time.Millisecond,
 	},
 	TxPool:        core.DefaultTxPoolConfig,
 	RPCGasCap:     50000000,

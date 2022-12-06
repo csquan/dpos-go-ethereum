@@ -60,7 +60,7 @@ const (
 
 	// minRecommitInterval is the minimal time interval to recreate the sealing block with
 	// any newly arrived transactions.
-	minRecommitInterval = 100 * time.Millisecond
+	minRecommitInterval = 500 * time.Millisecond
 
 	// maxRecommitInterval is the maximum time interval to recreate the sealing block with
 	// any newly arrived transactions.
@@ -378,7 +378,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		interrupt *int32
 	)
 
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(500 * time.Millisecond)
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {

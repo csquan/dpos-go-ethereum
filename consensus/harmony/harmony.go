@@ -211,6 +211,9 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
+	//if err := h.VerifySeal(chain, header); err != nil {
+	//	return ErrMismatchSignerAndValidator
+	//}
 
 	var parent *types.Header
 	if len(parents) > 0 {
@@ -255,11 +258,11 @@ func (h *Harmony) VerifyUncles(chain consensus.ChainReader, block *types.Block) 
 
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
-func (h *Harmony) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
+func (h *Harmony) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
 	return h.verifySeal(chain, header, nil)
 }
 
-func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, headers []*types.Header) error {
+func (h *Harmony) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, headers []*types.Header) error {
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -269,7 +272,7 @@ func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, 
 	if len(headers) > 0 {
 		prevHeader = headers[len(headers)-1]
 	} else {
-		prevHeader = chain.GetHeader(header.ParentHash, number-1)
+		prevHeader = chain.GetHeaderByNumber(number - 1)
 	}
 	prevCtx, err := NewContextFromHash(h.ctx.EDB(), prevHeader.EngineInfo)
 	if err != nil {
@@ -628,25 +631,26 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 // Seal generates a new block for the given input block with the local miner's
 // seal place on top.
 func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	number := block.Header().Number.Uint64()
+	header := block.Header()
+	number := header.Number.Uint64()
 	// Sealing the genesis block is not supported
 	if number == 0 {
 		return errUnknownBlock
 	}
 
 	// time's up, sign the block
-	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(block.Header()).Bytes())
+	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, "", sigHash(header).Bytes())
 	if err != nil {
 		log.Error("signFn error", "err", err)
 		return nil
 	}
-	copy(block.Header().Extra[len(block.Header().Extra)-extraSeal:], sealHash)
+	copy(header.Extra[len(header.Extra)-extraSeal:], sealHash)
 
 	go func() {
 		select {
 		case <-stop:
 			return
-		case results <- block.WithSeal(block.Header()):
+		case results <- block.WithSeal(header):
 			log.Warn("engine Sealed block broadcasting...", "bn", block.NumberU64(), "t", uint64(time.Now().Unix())-block.Time())
 			return
 		default:

@@ -32,7 +32,7 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inMemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	blockInterval    = uint64(3)
+	blockInterval    = uint64(2)
 	epochInterval    = uint64(600)
 	maxValidatorSize = 5
 	safeSize         = maxValidatorSize*2/3 + 1
@@ -43,7 +43,7 @@ var (
 	errInvalidSign     = errors.New("tx is not sign by valid validator")
 	errMarshalError    = errors.New("marshal error")
 	errNoValidProError = errors.New("no valid proposal")
-	errApporvalError   = errors.New("approval can only use once in 3 epoch")
+	errApprovalError   = errors.New("approval can only use once in 3 epoch")
 )
 
 var (
@@ -533,7 +533,7 @@ func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, c
 						globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
 						globalParams.ApproveMap[msg.From().String()] = curEpoch
 					} else {
-						return errApporvalError
+						return errApprovalError
 					}
 				} else { // 不存在-直接授权
 					globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
@@ -742,4 +742,8 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 	binary.BigEndian.PutUint64(newEpochBytes, newEpoch)
 	binary.BigEndian.PutUint64(newCntBytes, cnt)
 	ctx.mintCntTrie.t.Update(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+}
+
+func (h *Harmony) ValidateTx(tx *types.Transaction) error {
+	return nil
 }

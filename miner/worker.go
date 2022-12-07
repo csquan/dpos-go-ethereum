@@ -699,23 +699,13 @@ func (w *worker) updateSnapshot(env *environment) {
 func (w *worker) commitTransaction(env *environment, tx *types.Transaction) ([]*types.Log, error) {
 	snap := env.state.Snapshot()
 
-	var err error
-	var receipt *types.Receipt
-	ha, ok := w.engine.(*harmony.Harmony)
-	if ok {
-		err = ha.ApplyVoteTx(tx)
+	if ha, ok := w.engine.(*harmony.Harmony); ok {
+		_ = ha.ApplyVoteTx(tx)
 	}
-	if err == nil {
-		receipt, err = core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
-	} else {
-		err = core.ErrVoteTx
-	}
-
-	harmonySnap := ha.Ctx().Snapshot()
+	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &env.coinbase, env.gasPool, env.state, env.header, tx, &env.header.GasUsed, *w.chain.GetVMConfig())
 
 	if err != nil {
 		env.state.RevertToSnapshot(snap)
-		ha.Ctx().RevertToSnapShot(harmonySnap)
 		return nil, err
 	}
 	env.txs = append(env.txs, tx)

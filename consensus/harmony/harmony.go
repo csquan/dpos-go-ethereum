@@ -744,6 +744,58 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 	ctx.mintCntTrie.t.Update(append(newEpochBytes, validator.Bytes()...), newCntBytes)
 }
 
-func (h *Harmony) ValidateTx(tx *types.Transaction) error {
+// 这里校验vote的几个错误
+func (h *Harmony) ValidateTx(tx *types.Transaction, from common.Address) error {
+	to := *tx.To()
+	//1.成为或退出候选人，需要判断to==form
+	if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnCandidateTxType {
+		if from != to {
+			return errors.New("tx CandidateTxType or UnCandidateTxType but from address not equal to to address")
+		}
+	}
+	//2.给一个非候选人质押
+	if tx.Type() == types.DelegateTxType {
+		candidate := tx.To().Bytes()
+
+		// the candidate must be candidate
+		candidateInTrie, err := h.ctx.candidateTrie.t.TryGet(candidate)
+		if err != nil {
+			return err
+		}
+
+		//这里还得看是不是见证人
+		validators, err := h.ctx.GetValidators()
+
+		isValidator := false
+		for _, v := range validators {
+			if v == to {
+				isValidator = true
+			}
+		}
+		if candidateInTrie == nil && !isValidator {
+			return errors.New("invalid candidate to delegate")
+		}
+	}
+	//3.非候选人退出质押
+	if tx.Type() == types.UnDelegateTxType {
+		_, candidate := from.Bytes(), to.Bytes()
+
+		// the candidate must be candidate
+		candidateInTrie, err := h.ctx.candidateTrie.t.TryGet(candidate)
+		if err != nil {
+			return err
+		}
+		if candidateInTrie == nil {
+			return errors.New("invalid candidate to undelegate")
+		}
+		delegator := from.Bytes()
+		oldCandidate, err := h.ctx.voteTrie.t.TryGet(delegator)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(candidate, oldCandidate) {
+			return errors.New("mismatch candidate to undelegate")
+		}
+	}
 	return nil
 }

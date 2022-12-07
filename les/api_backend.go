@@ -313,6 +313,10 @@ func (b *LesApiBackend) Engine() consensus.Engine {
 	return b.eth.engine
 }
 
+func (b *LesApiBackend) IsArchive() bool {
+	return b.eth.config.NoPruning
+}
+
 func (b *LesApiBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.CurrentHeader()
 }

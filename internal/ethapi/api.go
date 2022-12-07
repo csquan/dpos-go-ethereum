@@ -650,11 +650,17 @@ func (s *BlockChainAPI) BlockNumber() hexutil.Uint64 {
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
 func (s *BlockChainAPI) GetBalance(ctx context.Context, address common.Address, blockNrOrHash rpc.BlockNumberOrHash) (*hexutil.Big, error) {
-	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
-	if state == nil || err != nil {
+	var st *state.StateDB = nil
+	var err error = nil
+	if s.b.IsArchive() {
+		st, _, err = s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+	} else {
+		st, _, err = s.b.StateAndHeaderByNumber(ctx, -1)
+	}
+	if st == nil || err != nil {
 		return nil, err
 	}
-	return (*hexutil.Big)(state.GetBalance(address)), state.Error()
+	return (*hexutil.Big)(st.GetBalance(address)), st.Error()
 }
 
 // 或者这里调用newVoteTrie

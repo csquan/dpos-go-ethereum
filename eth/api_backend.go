@@ -347,6 +347,10 @@ func (b *EthAPIBackend) Engine() consensus.Engine {
 	return b.eth.engine
 }
 
+func (b *EthAPIBackend) IsArchive() bool {
+	return b.eth.config.NoPruning
+}
+
 func (b *EthAPIBackend) CurrentHeader() *types.Header {
 	return b.eth.blockchain.CurrentHeader()
 }

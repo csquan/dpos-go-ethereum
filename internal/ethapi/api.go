@@ -1101,9 +1101,9 @@ func (s *BlockChainAPI) Call(ctx context.Context, args TransactionArgs, blockNrO
 func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNrOrHash rpc.BlockNumberOrHash, gasCap uint64) (hexutil.Uint64, error) {
 	// Binary search the gas requirement, as it may be higher than the amount used
 	var (
-		lo  uint64 = params.TxGas - 1
-		hi  uint64
-		cap uint64
+		lo uint64 = params.TxGas - 1
+		hi uint64
+		cp uint64
 	)
 	// Use zero address if sender unspecified.
 	if args.From == nil {
@@ -1136,11 +1136,11 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 	}
 	// Recap the highest gas limit with account's available balance.
 	if feeCap.BitLen() != 0 {
-		state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
+		st, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 		if err != nil {
 			return 0, err
 		}
-		balance := state.GetBalance(*args.From) // from can't be nil
+		balance := st.GetBalance(*args.From) // from can't be nil
 		available := new(big.Int).Set(balance)
 		if args.Value != nil {
 			if args.Value.ToInt().Cmp(available) >= 0 {
@@ -1166,7 +1166,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		log.Warn("(API)Caller gas above allowance, capping", "requested", hi, "cap", gasCap)
 		hi = gasCap
 	}
-	cap = hi
+	cp = hi
 
 	// Create a helper to check if a gas allowance results in an executable transaction
 	executable := func(gas uint64) (bool, *core.ExecutionResult, error) {
@@ -1199,7 +1199,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 	}
 	// Reject the transaction as invalid if it still fails at the highest allowance
-	if hi == cap {
+	if hi == cp {
 		failed, result, err := executable(hi)
 		if err != nil {
 			return 0, err
@@ -1212,7 +1212,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 				return 0, result.Err
 			}
 			// Otherwise, the specified gas cap is too low
-			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cap)
+			return 0, fmt.Errorf("gas required exceeds allowance (%d)", cp)
 		}
 	}
 	return hexutil.Uint64(hi), nil

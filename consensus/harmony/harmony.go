@@ -261,7 +261,7 @@ func (h *Harmony) VerifyUncles(chain consensus.ChainReader, block *types.Block) 
 
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
-func (h *Harmony) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
+func (h *Harmony) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
 	return h.verifySeal(chain, header, nil)
 }
 

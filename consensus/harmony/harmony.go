@@ -817,17 +817,7 @@ func (h *Harmony) ValidateTx(tx *types.Transaction, from common.Address) error {
 		if err != nil {
 			return err
 		}
-
-		//这里还得看是不是见证人
-		validators, err := h.ctx.GetValidators()
-
-		isValidator := false
-		for _, v := range validators {
-			if v == to {
-				isValidator = true
-			}
-		}
-		if candidateInTrie == nil && !isValidator {
+		if candidateInTrie == nil {
 			return errors.New("invalid candidate to delegate")
 		}
 	}

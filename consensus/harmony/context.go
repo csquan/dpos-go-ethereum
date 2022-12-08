@@ -245,16 +245,7 @@ func (c *Context) Delegate(delegatorAddr, candidateAddr common.Address) error {
 		return err
 	}
 
-	//这里还得看是不是见证人
-	validators, err := c.GetValidators()
-
-	isValidator := false
-	for _, v := range validators {
-		if v == candidateAddr {
-			isValidator = true
-		}
-	}
-	if candidateInTrie == nil && !isValidator {
+	if candidateInTrie == nil {
 		return errors.New("invalid candidate to delegate")
 	}
 

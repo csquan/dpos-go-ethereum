@@ -5397,13 +5397,6 @@ var methods = function () {
         inputFormatter: [formatters.inputTransactionFormatter]
     });
 
-    var becomeCanlidate = new Method({
-        name: 'becomeCanlidate',
-        call: 'eth_becomeCanlidate',
-        params: 1,
-        inputFormatter: [formatters.inputFormatter]
-    });
-
     var signTransaction = new Method({
         name: 'signTransaction',
         call: 'eth_signTransaction',
@@ -5482,7 +5475,6 @@ var methods = function () {
         sendRawTransaction,
         signTransaction,
         sendTransaction,
-        becomeCanlidate,
         sign,
         compileSolidity,
         compileLLL,
@@ -5691,13 +5683,6 @@ var methods = function () {
         inputFormatter: [formatters.inputAddressFormatter, null, null]
     });
 
-    var becomeCanlidate = new Method({
-        name: 'becomeCanlidate',
-        call: 'personal_becomeCanlidate',
-        params: 1,
-        inputFormatter: [formatters.inputFormatter]
-    });
-
     var sendTransaction = new Method({
         name: 'sendTransaction',
         call: 'personal_sendTransaction',
@@ -5718,7 +5703,6 @@ var methods = function () {
         unlockAccount,
         ecRecover,
         sign,
-        becomeCanlidate,
         sendTransaction,
         lockAccount
     ];

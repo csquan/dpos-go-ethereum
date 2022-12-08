@@ -471,24 +471,6 @@ func (s *PersonalAccountAPI) SendTransaction(ctx context.Context, args Transacti
 	return SubmitTransaction(ctx, s.b, signed)
 }
 
-// becomeCanlidate will create a transaction from the given arguments and
-// tries to sign it with the key associated with args.From. If the given
-// passwd isn't able to decrypt the key it fails.
-func (s *PersonalAccountAPI) becomeCanlidate(ctx context.Context, args TransactionArgs, passwd string) (common.Hash, error) {
-	if args.Nonce == nil {
-		// Hold the addresse's mutex around signing to prevent concurrent assignment of
-		// the same nonce to multiple accounts.
-		s.nonceLock.LockAddr(args.from())
-		defer s.nonceLock.UnlockAddr(args.from())
-	}
-	signed, err := s.signTransaction(ctx, &args, passwd)
-	if err != nil {
-		log.Warn("Failed transaction send attempt", "from", args.from(), "to", args.To, "value", args.Value.ToInt(), "err", err)
-		return common.Hash{}, err
-	}
-	return SubmitTransaction(ctx, s.b, signed)
-}
-
 // SignTransaction will create a transaction from the given arguments and
 // tries to sign it with the key associated with args.From. If the given passwd isn't
 // able to decrypt the key it fails. The transaction is returned in RLP-form, not broadcast

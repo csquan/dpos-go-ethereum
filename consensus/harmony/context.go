@@ -2,6 +2,7 @@ package harmony
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -353,6 +354,26 @@ func (c *Context) GetValidators() ([]common.Address, error) {
 	return validators, nil
 }
 
+func encodeUint64ToBytes(number uint64) []byte {
+	enc := make([]byte, 8)
+	binary.BigEndian.PutUint64(enc, number)
+	return enc
+}
+
+func (c *Context) GetValidatorsInEpoch(epochNumber uint64) ([]common.Address, error) {
+	var validators []common.Address
+	key := []byte("epoch-validator")
+	key = append(key, encodeUint64ToBytes(epochNumber)...)
+	validatorsRLP, err := c.epochTrie.t.TryGet(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode validators: %s", err)
+	}
+	if err := rlp.DecodeBytes(validatorsRLP, &validators); err != nil {
+		return nil, fmt.Errorf("failed to decode validators: %s", err)
+	}
+	return validators, nil
+}
+
 func (c *Context) GetDelegates() (map[common.Address]common.Address, error) {
 	delegates := map[common.Address]common.Address{}
 
@@ -373,6 +394,16 @@ func (c *Context) GetDelegates() (map[common.Address]common.Address, error) {
 
 func (c *Context) SetValidators(validators []common.Address) error {
 	key := []byte("validator")
+	validatorsRLP, err := rlp.EncodeToBytes(validators)
+	if err != nil {
+		return fmt.Errorf("failed to encode validators to rlp bytes: %s", err)
+	}
+	return c.epochTrie.t.TryUpdate(key, validatorsRLP)
+}
+
+func (c *Context) SetValidatorsInEpoch(validators []common.Address, epochNumber uint64) error {
+	key := []byte("epoch-validator")
+	key = append(key, encodeUint64ToBytes(epochNumber)...)
 	validatorsRLP, err := rlp.EncodeToBytes(validators)
 	if err != nil {
 		return fmt.Errorf("failed to encode validators to rlp bytes: %s", err)

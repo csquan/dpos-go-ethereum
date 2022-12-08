@@ -1,4 +1,4 @@
-// Copyright 2021 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,25 +17,27 @@
 package misc
 
 import (
-	"errors"
 	"fmt"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
 )
 
-// VerifyGaslimit verifies the header gas limit according increase/decrease
-// in relation to the parent gas limit.
-func VerifyGaslimit(parentGasLimit, headerGasLimit uint64) error {
-	// Verify that the gas limit remains within allowed bounds
-	diff := int64(parentGasLimit) - int64(headerGasLimit)
-	if diff < 0 {
-		diff *= -1
+// VerifyForkHashes verifies that blocks conforming to network hard-forks do have
+// the correct hashes, to avoid clients going off on different chains. This is an
+// optional feature.
+func VerifyForkHashes(config *params.ChainConfig, header *types.Header, uncle bool) error {
+	// We don't care about uncles
+	if uncle {
+		return nil
 	}
-	limit := parentGasLimit / params.GasLimitBoundDivisor
-	if uint64(diff) >= limit {
-		return fmt.Errorf("invalid gas limit: have %d, want %d +-= %d", headerGasLimit, parentGasLimit, limit-1)
+	// If the homestead reprice hash is set, validate it
+	if config.EIP150Block != nil && config.EIP150Block.Cmp(header.Number) == 0 {
+		if config.EIP150Hash != (common.Hash{}) && config.EIP150Hash != header.Hash() {
+			return fmt.Errorf("homestead gas reprice fork: have %#x, want %#x", header.Hash(), config.EIP150Hash)
+		}
 	}
-	if headerGasLimit < params.MinGasLimit {
-		return errors.New("invalid gas limit below 5000")
-	}
+	// All ok, return
 	return nil
 }

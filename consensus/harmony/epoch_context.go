@@ -26,6 +26,11 @@ type EpochContext struct {
 	stateDB   *state.StateDB
 }
 
+var (
+	epochInterval = uint64(600)
+	blockInterval = 2
+)
+
 // countVotes
 func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err error) {
 	votes = map[common.Address]*big.Int{}
@@ -95,7 +100,8 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 		if cntBytes, err := ec.Context.mintCntTrie.t.TryGet(key); err == nil && cntBytes != nil {
 			cnt = binary.BigEndian.Uint64(cntBytes)
 		}
-		if cnt < epochDuration/blockInterval/maxValidatorSize/2 {
+		//@keep, remove compile error
+		if cnt < epochDuration/uint64(blockInterval)/maxValidatorSize/2 {
 			// not active validators need kick out
 			needKickOutValidators = append(needKickOutValidators, &sortableAddress{validator, big.NewInt(int64(cnt))})
 		}
@@ -135,10 +141,10 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 
 func (ec *EpochContext) lookupValidator(now uint64) (validator common.Address, err error) {
 	offset := now % epochInterval
-	if offset%blockInterval != 0 {
+	if offset%uint64(blockInterval) != 0 {
 		return common.Address{}, ErrInvalidMintBlockTime
 	}
-	offset /= blockInterval
+	offset /= uint64(blockInterval)
 
 	validators, err := ec.Context.GetValidators()
 	if err != nil {
@@ -205,6 +211,10 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header, h *Harmony) erro
 		}
 		if err = ec.Context.SetValidators(sortedValidators); err != nil {
 			log.Warn("set new validators", "err", err)
+		}
+
+		if err = ec.Context.SetValidatorsInEpoch(sortedValidators, epochNumber); err != nil {
+			//TODO
 		}
 
 		log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)

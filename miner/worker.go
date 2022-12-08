@@ -60,11 +60,11 @@ const (
 
 	// minRecommitInterval is the minimal time interval to recreate the sealing block with
 	// any newly arrived transactions.
-	minRecommitInterval = 1 * time.Second
+	minRecommitInterval = 100 * time.Millisecond
 
 	// maxRecommitInterval is the maximum time interval to recreate the sealing block with
 	// any newly arrived transactions.
-	maxRecommitInterval = 15 * time.Second
+	maxRecommitInterval = 1 * time.Second
 
 	// intervalAdjustRatio is the impact a single interval adjustment has on sealing work
 	// resubmitting interval.
@@ -378,7 +378,7 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		interrupt *int32
 	)
 
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(100 * time.Millisecond)
 
 	// commit aborts in-flight transaction execution with given signal and resubmits a new one.
 	commit := func(noempty bool, s int32) {
@@ -391,7 +391,12 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 		case <-w.exitCh:
 			return
 		}
-		ticker.Reset(recommit)
+		t := recommit
+		//if engine, ok := w.engine.(*harmony.Harmony); ok {
+		//	t =  engine.CalcRemain()
+		//}
+		ticker.Reset(t)
+
 		atomic.StoreInt32(&w.newTxs, 0)
 	}
 	// clearPending cleans the stale pending tasks.
@@ -418,10 +423,10 @@ func (w *worker) newWorkLoop(recommit time.Duration) {
 			// higher priced transactions. Disable this overhead for pending blocks.
 			if w.isRunning() && (w.chainConfig.Harmony != nil || w.chainConfig.Clique == nil || w.chainConfig.Clique.Period > 0) {
 				// Short circuit if no new transaction arrives.
-				//if atomic.LoadInt32(&w.newTxs) == 0 {  // FIXME maybe open this comment
+				// if atomic.LoadInt32(&w.newTxs) == 0 {  // FIXME maybe open this comment
 				//	timer.Reset(recommit)
 				//	continue
-				//}
+				// }
 				commit(true, commitInterruptResubmit)
 			}
 		case <-w.exitCh:
@@ -627,8 +632,7 @@ func (w *worker) resultLoop() {
 				continue
 			}
 			log.Info("Successfully sealed new block", "number", block.Number(),
-				"sealHash", sealhash.String(), "hash", hash.String(), "time", block.Time(),
-				"engineInfo", block.Header().EngineInfo.String(),
+				"hash", hash.String(), "time", block.Time(),
 				"elapsed", common.PrettyDuration(time.Since(task.createdAt)))
 
 			// Broadcast the block and announce chain insertion event
@@ -857,6 +861,12 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		}
 		timestamp = parent.Time() + 1
 	}
+	// this will ensure we're not going off too far in the future
+	if now := time.Now().Unix(); int64(timestamp) > now+1 {
+		wait := time.Duration(int64(timestamp)-now) * time.Second
+		log.Info("Mining too far in the future", "wait", common.PrettyDuration(wait))
+		time.Sleep(wait)
+	}
 	// Construct the sealing block header, set the extra field if it's allowed
 	num := parent.Number()
 	header := &types.Header{
@@ -897,7 +907,10 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 func (w *worker) fillTransactions(interrupt *int32, env *environment) error {
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
+	p, q := w.eth.TxPool().Stats()
+	log.Debug("pre fillTransactions", "p", p, "q", q)
 	pending := w.eth.TxPool().Pending(true)
+	log.Debug("fillTransactions", "pending", len(pending))
 	localTxs, remoteTxs := make(map[common.Address]types.Transactions), pending
 	for _, account := range w.eth.TxPool().Locals() {
 		if txs := remoteTxs[account]; len(txs) > 0 {
@@ -956,11 +969,29 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	if err != nil {
 		return
 	}
+
+	if engine, ok := w.engine.(*harmony.Harmony); ok {
+		if err := engine.CheckValidator(w.chain.CurrentBlock(), uint64(time.Now().Unix())); err != nil {
+			switch err {
+			case harmony.ErrWaitForPrevBlock,
+				harmony.ErrMintFutureBlock,
+				harmony.ErrInvalidBlockValidator,
+				harmony.ErrInvalidMintBlockTime:
+				log.Trace("Failed to mint the block, while ", "err", err)
+			case harmony.ErrTakeItEasy:
+				log.Trace("consecutively commit..", "err", err)
+			default:
+				log.Error("Failed to mint the block", "err", err)
+			}
+			return
+		}
+	}
+
 	// Create an empty block based on temporary copied state for
 	// sealing in advance without waiting block execution finished.
-	if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
-		w.commit(work.copy(), nil, false, start)
-	}
+	// if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
+	// 	w.commit(work.copy(), nil, false, start)
+	// }
 
 	// Fill pending transactions from the txpool
 	err = w.fillTransactions(interrupt, work)
@@ -985,6 +1016,8 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 func (w *worker) commit(env *environment, interval func(), update bool, start time.Time) error {
 	run := func() error {
 		env := env.copy()
+
+		log.Info("engine committing", "bn", env.header.Number.Uint64(), "t", env.header.Time)
 
 		block, err := w.engine.FinalizeAndAssemble(w.chain, env.header, env.state, env.txs, env.unclelist(), env.receipts)
 		if err != nil {
@@ -1012,24 +1045,8 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 		}
 		// Create a local environment copy, avoid the data race with snapshot state.
 		// https://github.com/ethereum/go-ethereum/issues/24299
-
-		if engine, ok := w.engine.(*harmony.Harmony); ok {
-			if err := engine.CheckValidator(w.chain.CurrentBlock(), uint64(time.Now().Unix())); err != nil {
-				switch err {
-				case harmony.ErrWaitForPrevBlock,
-					harmony.ErrMintFutureBlock,
-					harmony.ErrInvalidBlockValidator,
-					harmony.ErrInvalidMintBlockTime:
-					log.Debug("Failed to mint the block, while ", "err", err)
-				default:
-					log.Error("Failed to mint the block", "err", err)
-				}
-				return err
-			} else {
-				if err = run(); err != nil {
-					return err
-				}
-			}
+		if err := run(); err != nil {
+			return err
 		}
 	}
 	if update {

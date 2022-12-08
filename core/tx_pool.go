@@ -637,7 +637,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	if tx.Gas() < intrGas {
 		return ErrIntrinsicGas
 	}
-	//增加验证：对于提案类型，需要验证：1.是否有效的json格式 2.是否是规定的修改内容
+	// 增加验证：对于提案类型，需要验证：1.是否有效的json格式 2.是否是规定的修改内容
 	if tx.Type() == types.ProposalTxType {
 		data := tx.Data()
 		name := gjson.Get(string(data), "name")
@@ -929,7 +929,6 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 		news = make([]*types.Transaction, 0, len(txs))
 	)
 	for i, tx := range txs {
-		log.Debug("tx coming", "i", i, "tx", txString(tx, pool.signer), "local", local, "sync", sync)
 		// If the transaction is known, pre-set the error slot
 		if pool.all.Get(tx.Hash()) != nil {
 			errs[i] = ErrAlreadyKnown
@@ -955,12 +954,6 @@ func (pool *TxPool) addTxs(txs []*types.Transaction, local, sync bool) []error {
 	// Process all the new transaction and merge any errors into the original slice
 	pool.mu.Lock()
 	newErrs, dirtyAddrs := pool.addTxsLocked(news, local)
-	for i, err := range newErrs {
-		if err != nil {
-			log.Warn("addTxsLocked errs", "i", i, "err", err)
-		}
-	}
-	pool.logTxDebug("after addTxsLocked", true)
 	pool.mu.Unlock()
 
 	var nilSlot = 0
@@ -1239,7 +1232,6 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 
 	dropBetweenReorgHistogram.Update(int64(pool.changesSinceReorg))
 	pool.changesSinceReorg = 0 // Reset change counter
-	pool.logTxDebug("after reorg", true)
 	pool.mu.Unlock()
 
 	// Notify subsystems for newly added transactions

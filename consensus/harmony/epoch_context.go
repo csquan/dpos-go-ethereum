@@ -134,7 +134,6 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 }
 
 func (ec *EpochContext) lookupValidator(now uint64) (validator common.Address, err error) {
-	validator = common.Address{}
 	offset := now % epochInterval
 	if offset%blockInterval != 0 {
 		return common.Address{}, ErrInvalidMintBlockTime
@@ -230,7 +229,7 @@ func approveProposal(engine *Harmony, currentEpoch uint64) error {
 	for id, _ := range globalParams.ValidProposals {
 		validCnt := globalParams.ProposalValidEpochCnt
 
-		if currentEpoch <= globalParams.ProposalEpoch[id]+validCnt+1 { //查看当前id是否过期
+		if currentEpoch <= globalParams.ProposalEpoch[id]+validCnt+1 { // 查看当前id是否过期
 			hash := globalParams.ValidProposals[id]
 
 			proposalTx := GetTransaction(engine.db, hash)
@@ -238,23 +237,23 @@ func approveProposal(engine *Harmony, currentEpoch uint64) error {
 				log.Info("In approveProposal", "can not find tx of hash:", hash)
 				continue
 			}
-			validators, err := engine.Ctx().GetValidators() //实时得到当前的见证人
+			validators, err := engine.Ctx().GetValidators() // 实时得到当前的见证人
 			if err != nil {
 				return fmt.Errorf("failed to get validator: %s", err)
 			}
 			threshold := len(validators)/2 + 1 // 这里门槛的设置需要再考虑
 			err = globalParams.ApplyProposals(id, proposalTx, threshold)
-			if err == nil { //表示执行成功
+			if err == nil { // 表示执行成功
 				data, err := json.Marshal(globalParams)
 				if err != nil {
 					return err
 				}
-				//写回rawdb
+				// 写回rawdb
 				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
 			}
-			if currentEpoch == globalParams.ProposalEpoch[id]+validCnt+1 { //移动到invalid-确保没有足够授权，但是到了最后截止日子能移动到invalid
-				//过期了-移动id到invalid中
-				//将ID在ValidProposals中删除，同时移动到InValidProposals中
+			if currentEpoch == globalParams.ProposalEpoch[id]+validCnt+1 { // 移动到invalid-确保没有足够授权，但是到了最后截止日子能移动到invalid
+				// 过期了-移动id到invalid中
+				// 将ID在ValidProposals中删除，同时移动到InValidProposals中
 				globalParams.InValidProposals[id] = globalParams.ValidProposals[id]
 				delete(globalParams.ValidProposals, id)
 
@@ -262,7 +261,7 @@ func approveProposal(engine *Harmony, currentEpoch uint64) error {
 				if err != nil {
 					return err
 				}
-				//写回rawdb
+				// 写回rawdb
 				rawdb.WriteParams(engine.GetDB(), globalParamsKey, data)
 			}
 		}

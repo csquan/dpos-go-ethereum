@@ -33,7 +33,7 @@ const (
 	extraSeal          = 65   // Fixed number of extra-data suffix bytes reserved for signer seal
 	inMemorySignatures = 4096 // Number of recent block signatures to keep in memory
 
-	blockInterval    = uint64(3)
+	blockInterval    = uint64(2)
 	epochInterval    = uint64(600)
 	maxValidatorSize = 5
 	safeSize         = maxValidatorSize*2/3 + 1
@@ -44,7 +44,7 @@ var (
 	errInvalidSign     = errors.New("tx is not sign by valid validator")
 	errMarshalError    = errors.New("marshal error")
 	errNoValidProError = errors.New("no valid proposal")
-	errApporvalError   = errors.New("approval can only use once in 3 epoch")
+	errApprovalError   = errors.New("approval can only use once in 3 epoch")
 )
 
 var (
@@ -212,6 +212,9 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
+	//if err := h.VerifySeal(chain, header); err != nil {
+	//	return ErrMismatchSignerAndValidator
+	//}
 
 	var parent *types.Header
 	if len(parents) > 0 {
@@ -258,7 +261,7 @@ func (h *Harmony) VerifyUncles(chain consensus.ChainReader, block *types.Block) 
 
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
-func (h *Harmony) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
+func (h *Harmony) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
 	return h.verifySeal(chain, header, nil)
 }
 
@@ -284,7 +287,7 @@ func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, 
 	if len(headers) > 0 {
 		prevHeader = headers[len(headers)-1]
 	} else {
-		prevHeader = chain.GetHeader(header.ParentHash, number-1)
+		prevHeader = chain.GetHeaderByNumber(number - 1)
 	}
 	prevCtx, err := NewContextFromHash(h.ctx.EDB(), prevHeader.EngineInfo)
 	if err != nil {
@@ -545,7 +548,7 @@ func (h *Harmony) ApplyProposalTx(tx *types.Transaction, header *types.Header, c
 						globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
 						globalParams.ApproveMap[msg.From().String()] = curEpoch
 					} else {
-						return errApporvalError
+						return errApprovalError
 					}
 				} else { // 不存在-直接授权
 					globalParams.ProposalApproves[id] = append(globalParams.ProposalApproves[id], msg.From())
@@ -794,4 +797,60 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 	binary.BigEndian.PutUint64(newEpochBytes, newEpoch)
 	binary.BigEndian.PutUint64(newCntBytes, cnt)
 	ctx.mintCntTrie.t.Update(append(newEpochBytes, validator.Bytes()...), newCntBytes)
+}
+
+// 这里校验vote的几个错误
+func (h *Harmony) ValidateTx(tx *types.Transaction, from common.Address) error {
+	to := *tx.To()
+	//1.成为或退出候选人，需要判断to==form
+	if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnCandidateTxType {
+		if from != to {
+			return errors.New("tx CandidateTxType or UnCandidateTxType but from address not equal to to address")
+		}
+	}
+	//2.给一个非候选人质押
+	if tx.Type() == types.DelegateTxType {
+		candidate := tx.To().Bytes()
+
+		// the candidate must be candidate
+		candidateInTrie, err := h.ctx.candidateTrie.t.TryGet(candidate)
+		if err != nil {
+			return err
+		}
+
+		//这里还得看是不是见证人
+		validators, err := h.ctx.GetValidators()
+
+		isValidator := false
+		for _, v := range validators {
+			if v == to {
+				isValidator = true
+			}
+		}
+		if candidateInTrie == nil && !isValidator {
+			return errors.New("invalid candidate to delegate")
+		}
+	}
+	//3.非候选人退出质押
+	if tx.Type() == types.UnDelegateTxType {
+		_, candidate := from.Bytes(), to.Bytes()
+
+		// the candidate must be candidate
+		candidateInTrie, err := h.ctx.candidateTrie.t.TryGet(candidate)
+		if err != nil {
+			return err
+		}
+		if candidateInTrie == nil {
+			return errors.New("invalid candidate to undelegate")
+		}
+		delegator := from.Bytes()
+		oldCandidate, err := h.ctx.voteTrie.t.TryGet(delegator)
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(candidate, oldCandidate) {
+			return errors.New("mismatch candidate to undelegate")
+		}
+	}
+	return nil
 }

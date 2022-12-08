@@ -644,7 +644,7 @@ func (h *handler) BroadcastTransactions(txs types.Transactions) {
 		annoCount += len(hashes)
 		peer.AsyncSendPooledTransactionHashes(hashes)
 	}
-	log.Debug("Transaction broadcast", "txs", len(txs),
+	log.Trace("Transaction broadcast", "txs", len(txs),
 		"announce packs", annoPeers, "announced hashes", annoCount,
 		"tx packs", directPeers, "broadcast txs", directCount)
 }
@@ -666,8 +666,8 @@ func (h *handler) txBroadcastLoop() {
 	defer h.wg.Done()
 	for {
 		select {
-		case event := <-h.txsCh:
-			h.BroadcastTransactions(event.Txs)
+		case txEv := <-h.txsCh:
+			h.BroadcastTransactions(txEv.Txs)
 		case <-h.txsSub.Err():
 			return
 		}

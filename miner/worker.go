@@ -960,7 +960,8 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		return
 	}
 
-	if err := w.checkValidator(); err != nil {
+	env := work.copy()
+	if err := w.checkValidator(); err == nil {
 		// Create an empty block based on temporary copied state for
 		// sealing in advance without waiting block execution finished.
 		// if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
@@ -973,9 +974,10 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 			work.discard()
 			return
 		}
-		w.commit(work.copy(), w.fullTaskHook, start)
+		env = work.copy()
+		w.commit(env, w.fullTaskHook, start)
 	}
-	w.updateSnapshot(work.copy())
+	w.updateSnapshot(env)
 
 	// Swap out the old work with the new one, terminating any leftover
 	// prefetcher processes in the mean time and starting a new one.

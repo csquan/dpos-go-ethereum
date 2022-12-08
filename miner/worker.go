@@ -960,6 +960,32 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 		return
 	}
 
+	if err := w.checkValidator(); err != nil {
+		// Create an empty block based on temporary copied state for
+		// sealing in advance without waiting block execution finished.
+		// if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
+		// 	w.commit(work.copy(), nil, false, start)
+		// }
+
+		// Fill pending transactions from the txpool
+		err = w.fillTransactions(interrupt, work)
+		if errors.Is(err, errBlockInterruptedByNewHead) {
+			work.discard()
+			return
+		}
+		w.commit(work.copy(), w.fullTaskHook, start)
+	}
+	w.updateSnapshot(work.copy())
+
+	// Swap out the old work with the new one, terminating any leftover
+	// prefetcher processes in the mean time and starting a new one.
+	if w.current != nil {
+		w.current.discard()
+	}
+	w.current = work
+}
+
+func (w *worker) checkValidator() error {
 	if engine, ok := w.engine.(*harmony.Harmony); ok {
 		if err := engine.CheckValidator(w.chain.CurrentBlock(), uint64(time.Now().Unix())); err != nil {
 			switch err {
@@ -973,37 +999,17 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 			default:
 				log.Error("Failed to mint the block", "err", err)
 			}
-			return
+			return err
 		}
 	}
-
-	// Create an empty block based on temporary copied state for
-	// sealing in advance without waiting block execution finished.
-	// if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
-	// 	w.commit(work.copy(), nil, false, start)
-	// }
-
-	// Fill pending transactions from the txpool
-	err = w.fillTransactions(interrupt, work)
-	if errors.Is(err, errBlockInterruptedByNewHead) {
-		work.discard()
-		return
-	}
-	w.commit(work.copy(), w.fullTaskHook, true, start)
-
-	// Swap out the old work with the new one, terminating any leftover
-	// prefetcher processes in the mean time and starting a new one.
-	if w.current != nil {
-		w.current.discard()
-	}
-	w.current = work
+	return nil
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
 // and commits new work if consensus engine is running.
 // Note the assumption is held that the mutation is allowed to the passed env, do
 // the deep copy first.
-func (w *worker) commit(env *environment, interval func(), update bool, start time.Time) error {
+func (w *worker) commit(env *environment, interval func(), start time.Time) error {
 	run := func() error {
 		env := env.copy()
 
@@ -1039,9 +1045,7 @@ func (w *worker) commit(env *environment, interval func(), update bool, start ti
 			return err
 		}
 	}
-	if update {
-		w.updateSnapshot(env)
-	}
+
 	return nil
 }
 

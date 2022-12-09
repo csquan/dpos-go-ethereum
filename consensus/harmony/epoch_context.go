@@ -21,9 +21,9 @@ import (
 var globalParamsKey = []byte("hui chan global params")
 
 type EpochContext struct {
-	TimeStamp uint64
-	Context   *Context
-	stateDB   *state.StateDB
+	Number  uint64
+	Context *Context
+	stateDB *state.StateDB
 }
 
 var (
@@ -73,7 +73,7 @@ func (ec *EpochContext) countVotes() (votes map[common.Address]*big.Int, err err
 	return votes, nil
 }
 
-func (ec *EpochContext) kickOutValidator(epoch uint64) error {
+func (ec *EpochContext) kickOutValidator(epochNumber uint64, epochLength uint64) error {
 	validators, err := ec.Context.GetValidators()
 	if err != nil {
 		return fmt.Errorf("failed to get validator: %s", err)
@@ -82,30 +82,22 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 		return errors.New("no validator could be kickout")
 	}
 
-	epochDuration := epochInterval
-	// First epoch duration may lt epoch interval,
-	// while the first block time wouldn't always align with epoch interval,
-	// so calculate the first epoch duration with first block time instead of epoch interval,
-	// prevent the validators were kick-out incorrectly.
-	if ec.TimeStamp-timeOfFirstBlock < epochInterval {
-		epochDuration = ec.TimeStamp - timeOfFirstBlock
-	}
-
 	needKickOutValidators := sortableAddresses{}
 	for _, validator := range validators {
 		key := make([]byte, 8)
-		binary.BigEndian.PutUint64(key, epoch)
+		binary.BigEndian.PutUint64(key, epochNumber)
 		key = append(key, validator.Bytes()...)
 		cnt := uint64(0)
 		if cntBytes, err := ec.Context.mintCntTrie.t.TryGet(key); err == nil && cntBytes != nil {
 			cnt = binary.BigEndian.Uint64(cntBytes)
 		}
-		//@keep, remove compile error
-		if cnt < epochDuration/uint64(blockInterval)/maxValidatorSize/2 {
+		//@keep, 如果出块数量低于全勤出块数量的50%, 我们认为该validator是不活跃的validator记录
+		if cnt < epochLength/uint64(len(validators))/2 {
 			// not active validators need kick out
 			needKickOutValidators = append(needKickOutValidators, &sortableAddress{validator, big.NewInt(int64(cnt))})
 		}
 	}
+
 	// no validators need kick out
 	needKickOutValidatorCnt := len(needKickOutValidators)
 	if needKickOutValidatorCnt <= 0 {
@@ -125,7 +117,7 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 	for i, validator := range needKickOutValidators {
 		// ensure candidate count greater than or equal to safeSize
 		if candidateCount <= safeSize {
-			log.Info("No more candidate can be kickout", "prevEpochID", epoch, "candidateCount", candidateCount, "needKickoutCount", len(needKickOutValidators)-i)
+			log.Info("No more candidate can be kickout", "prevEpochID", epochNumber, "candidateCount", candidateCount, "needKickoutCount", len(needKickOutValidators)-i)
 			return nil
 		}
 
@@ -134,36 +126,49 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 		}
 		// if kick-out success, candidateCount minus 1
 		candidateCount--
-		log.Info("Kickout candidate", "prevEpochID", epoch, "candidate", validator.address.String(), "mintCnt", validator.weight.String())
+		log.Info("Kickout candidate", "prevEpochID", epochNumber, "candidate", validator.address.String(), "mintCnt", validator.weight.String())
 	}
 	return nil
 }
 
-func (ec *EpochContext) lookupValidator(now uint64) (validator common.Address, err error) {
-	offset := now % epochInterval
-	if offset%uint64(blockInterval) != 0 {
-		return common.Address{}, ErrInvalidMintBlockTime
-	}
-	offset /= uint64(blockInterval)
-
+// lookupValidator
+func (ec *EpochContext) lookupValidator(number uint64) (validator common.Address, err error) {
 	validators, err := ec.Context.GetValidators()
 	if err != nil {
 		return common.Address{}, err
 	}
-	validatorSize := len(validators)
-	if validatorSize == 0 {
+	if len(validators) != 0 {
+		offset := number % uint64(len(validators))
+		return validators[offset], nil
+	} else {
 		return common.Address{}, errors.New("failed to lookup validator")
 	}
-	offset %= uint64(validatorSize)
-	return validators[offset], nil
 }
 
-func (ec *EpochContext) tryElect(genesis, parent *types.Header, h *Harmony) error {
-	genesisEpoch := genesis.Time / epochInterval
-	prevEpoch := parent.Time / epochInterval
-	currentEpoch := ec.TimeStamp / epochInterval
+//func (ec *EpochContext) lookupValidator(now uint64) (validator common.Address, err error) {
+//	offset := now % epochInterval
+//	if offset%uint64(blockInterval) != 0 {
+//		return common.Address{}, ErrInvalidMintBlockTime
+//	}
+//	offset /= uint64(blockInterval)
+//
+//	validators, err := ec.Context.GetValidators()
+//	if err != nil {
+//		return common.Address{}, err
+//	}
+//	validatorSize := len(validators)
+//	if validatorSize == 0 {
+//		return common.Address{}, errors.New("failed to lookup validator")
+//	}
+//	offset %= uint64(validatorSize)
+//	return validators[offset], nil
+//}
 
-	prevEpochIsGenesis := prevEpoch == genesisEpoch
+func (ec *EpochContext) tryElect(parent *types.Header, h *Harmony, epochLength uint64) error {
+	prevEpoch := parent.Number.Uint64() / epochInterval
+	currentEpoch := ec.Number / epochInterval
+
+	prevEpochIsGenesis := parent.Number.Uint64()/epochLength == 0
 	if prevEpochIsGenesis && prevEpoch < currentEpoch {
 		prevEpoch = currentEpoch - 1
 	}
@@ -178,7 +183,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header, h *Harmony) erro
 		approveProposal(h, currentEpoch)
 		// if prevEpoch is not genesis, kick-out candidates not active
 		if !prevEpochIsGenesis && iter.Next() {
-			if err := ec.kickOutValidator(prevEpoch); err != nil {
+			if err := ec.kickOutValidator(prevEpoch, epochLength); err != nil {
 				return err
 			}
 		}
@@ -213,7 +218,7 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header, h *Harmony) erro
 			log.Warn("set new validators", "err", err)
 		}
 
-		if err = ec.Context.SetValidatorsInEpoch(sortedValidators, epochNumber); err != nil {
+		if err = ec.Context.SetValidatorsInEpoch(sortedValidators, currentEpoch); err != nil {
 			//TODO
 		}
 
@@ -221,6 +226,70 @@ func (ec *EpochContext) tryElect(genesis, parent *types.Header, h *Harmony) erro
 	}
 	return nil
 }
+
+//	func (ec *EpochContext) tryElect(genesis, parent *types.Header, h *Harmony, epoch uint64) error {
+//		genesisEpoch := genesis.Time / epochInterval
+//		prevEpoch := parent.Time / epochInterval
+//		currentEpoch := ec.TimeStamp / epochInterval
+//
+//		prevEpochIsGenesis := prevEpoch == genesisEpoch
+//		if prevEpochIsGenesis && prevEpoch < currentEpoch {
+//			prevEpoch = currentEpoch - 1
+//		}
+//
+//		if err := ec.Context.RefreshFromHash(parent.EngineInfo); err != nil {
+//			return err
+//		}
+//		prevEpochBytes := make([]byte, 8)
+//		binary.BigEndian.PutUint64(prevEpochBytes, prevEpoch)
+//		iter := ec.Context.mintCntTrie.Iterator(prevEpochBytes)
+//		for i := prevEpoch; i < currentEpoch; i++ {
+//			approveProposal(h, currentEpoch)
+//			// if prevEpoch is not genesis, kick-out candidates not active
+//			if !prevEpochIsGenesis && iter.Next() {
+//				if err := ec.kickOutValidator(prevEpoch); err != nil {
+//					return err
+//				}
+//			}
+//			votes, err := ec.countVotes()
+//			if err != nil {
+//				return err
+//			}
+//			candidates := sortableAddresses{}
+//			for candidate, cnt := range votes {
+//				candidates = append(candidates, &sortableAddress{candidate, cnt})
+//			}
+//			if len(candidates) < safeSize {
+//				return errors.New("too few candidates")
+//			}
+//			sort.Sort(candidates)
+//			if len(candidates) > maxValidatorSize {
+//				candidates = candidates[:maxValidatorSize]
+//			}
+//
+//			// shuffle candidates
+//			seed := binary.LittleEndian.Uint64(crypto.Keccak512(parent.Hash().Bytes())) + i
+//			r := rand.New(rand.NewSource(int64(seed)))
+//			for i := len(candidates) - 1; i > 0; i-- {
+//				j := int(r.Int31n(int32(i + 1)))
+//				candidates[i], candidates[j] = candidates[j], candidates[i]
+//			}
+//			sortedValidators := make([]common.Address, 0)
+//			for _, candidate := range candidates {
+//				sortedValidators = append(sortedValidators, candidate.address)
+//			}
+//			if err = ec.Context.SetValidators(sortedValidators); err != nil {
+//				log.Warn("set new validators", "err", err)
+//			}
+//
+//			if err = ec.Context.SetValidatorsInEpoch(sortedValidators, epochNumber); err != nil {
+//				//TODO
+//			}
+//
+//			log.Info("Come to new epoch", "prevEpoch", i, "nextEpoch", i+1)
+//		}
+//		return nil
+//	}
 func GetTransaction(db ethdb.Database, hash common.Hash) *types.Transaction {
 	tx, _, _, _ := rawdb.ReadTransaction(db, hash)
 	if tx == nil {

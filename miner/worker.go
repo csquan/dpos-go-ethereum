@@ -76,8 +76,6 @@ const (
 
 	// staleThreshold is the maximum depth of the acceptable stale block.
 	staleThreshold = 7
-
-	epochInterval = uint64(600)
 )
 
 var (

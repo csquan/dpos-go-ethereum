@@ -95,7 +95,7 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 		if cntBytes, err := ec.Context.mintCntTrie.t.TryGet(key); err == nil && cntBytes != nil {
 			cnt = binary.BigEndian.Uint64(cntBytes)
 		}
-		if cnt < epochDuration/blockInterval/maxValidatorSize/2 {
+		if cnt < epochDuration/blockInterval/uint64(len(validators))/2 {
 			// not active validators need kick out
 			needKickOutValidators = append(needKickOutValidators, &sortableAddress{validator, big.NewInt(int64(cnt))})
 		}

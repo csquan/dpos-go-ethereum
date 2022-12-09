@@ -188,7 +188,6 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if header.Number == nil {
 		return errUnknownBlock
 	}
-	number := header.Number.Uint64()
 	// Unnecessary to verify the block from feature
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
@@ -212,9 +211,27 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
+	// Verify that the gas limit is <= 2^63-1
+	if header.GasLimit > params.MaxGasLimit {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, params.MaxGasLimit)
+	}
 	//if err := h.VerifySeal(chain, header); err != nil {
 	//	return ErrMismatchSignerAndValidator
 	//}
+	//return nil
+	return h.verifyCascadingFields(chain, header, parents)
+}
+
+// verifyCascadingFields verifies all the header fields that are not standalone,
+// rather depend on a batch of previous headers. The caller may optionally pass
+// in a batch of parents (ascending order) to avoid looking those up from the
+// database. This is useful for concurrently verifying a batch of new headers.
+func (h *Harmony) verifyCascadingFields(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+	// The genesis block is the always valid dead-end
+	number := header.Number.Uint64()
+	if number == 0 {
+		return nil
+	}
 
 	var parent *types.Header
 	if len(parents) > 0 {
@@ -224,6 +241,10 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	}
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
+	}
+	// Verify that the gasUsed is <= gasLimit
+	if header.GasUsed > header.GasLimit {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
 	if parent.Time+blockInterval > header.Time+1 {
 		return ErrInvalidTimestamp

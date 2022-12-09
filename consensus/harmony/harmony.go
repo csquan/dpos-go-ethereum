@@ -77,6 +77,9 @@ var (
 	// invalid list of validators (i.e. non divisible by 20 bytes).
 	errInvalidSpanValidators = errors.New("invalid validator list on sprint end block")
 
+	// invalid list of validators (i.e. non divisible by 20 bytes).
+	errNotContinuousBlockNumber = errors.New("not continuous block number")
+
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
 

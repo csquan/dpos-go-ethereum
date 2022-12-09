@@ -168,17 +168,24 @@ func (ec *EpochContext) tryElect(parent *types.Header, h *Harmony, epochLength u
 	prevEpoch := parent.Number.Uint64() / epochInterval
 	currentEpoch := ec.Number / epochInterval
 
-	prevEpochIsGenesis := parent.Number.Uint64()/epochLength == 0
-	if prevEpochIsGenesis && prevEpoch < currentEpoch {
-		prevEpoch = currentEpoch - 1
+	//@keep, 检查区块高度的连续性
+	if ec.Number != parent.Number.Uint64()+1 {
+		return errNotContinuousBlockNumber
 	}
 
+	prevEpochIsGenesis := parent.Number.Uint64()/epochLength == 0
+	//if prevEpochIsGenesis && prevEpoch < currentEpoch {
+	//	prevEpoch = currentEpoch - 1
+	//}
+
+	//@keep, 创世区块的context如何写入
 	if err := ec.Context.RefreshFromHash(parent.EngineInfo); err != nil {
 		return err
 	}
 	prevEpochBytes := make([]byte, 8)
 	binary.BigEndian.PutUint64(prevEpochBytes, prevEpoch)
 	iter := ec.Context.mintCntTrie.Iterator(prevEpochBytes)
+	//@keep, epoch 边界，比如prevEpoch = 1, currentEpoch = 2
 	for i := prevEpoch; i < currentEpoch; i++ {
 		approveProposal(h, currentEpoch)
 		// if prevEpoch is not genesis, kick-out candidates not active
@@ -218,6 +225,7 @@ func (ec *EpochContext) tryElect(parent *types.Header, h *Harmony, epochLength u
 			log.Warn("set new validators", "err", err)
 		}
 
+		//@keep, 在一些场景下有可能没有设置epoch-validators, 这种情况需要特别处理。
 		if err = ec.Context.SetValidatorsInEpoch(sortedValidators, currentEpoch); err != nil {
 			//TODO
 		}

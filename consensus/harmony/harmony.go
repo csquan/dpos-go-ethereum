@@ -81,6 +81,7 @@ var (
 	ErrInvalidMintBlockTime       = errors.New("not mining time")
 	ErrTakeItEasy                 = errors.New("take it easy")
 	ErrNilBlockHeader             = errors.New("nil block header returned")
+	ErrNoCandidateAddr            = errors.New("no candidate address")
 )
 var (
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
@@ -801,16 +802,23 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 
 // 这里校验vote的几个错误
 func (h *Harmony) ValidateTx(tx *types.Transaction, from common.Address) error {
-	to := *tx.To()
 	//1.成为或退出候选人，需要判断to==form
 	if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnCandidateTxType {
-		if from != to {
+		to := tx.To()
+		if to == nil {
+			return ErrNoCandidateAddr
+		}
+		if bytes.Equal(from.Bytes(), to.Bytes()) {
 			return errors.New("tx CandidateTxType or UnCandidateTxType but from address not equal to to address")
 		}
 	}
 	//2.给一个非候选人质押
 	if tx.Type() == types.DelegateTxType {
-		candidate := tx.To().Bytes()
+		to := tx.To()
+		if to == nil {
+			return ErrNoCandidateAddr
+		}
+		candidate := to.Bytes()
 
 		// the candidate must be candidate
 		candidateInTrie, err := h.ctx.candidateTrie.t.TryGet(candidate)
@@ -823,7 +831,11 @@ func (h *Harmony) ValidateTx(tx *types.Transaction, from common.Address) error {
 	}
 	//3.非候选人退出质押
 	if tx.Type() == types.UnDelegateTxType {
-		_, candidate := from.Bytes(), to.Bytes()
+		to := tx.To()
+		if to == nil {
+			return ErrNoCandidateAddr
+		}
+		candidate := to.Bytes()
 
 		// the candidate must be candidate
 		candidateInTrie, err := h.ctx.candidateTrie.t.TryGet(candidate)

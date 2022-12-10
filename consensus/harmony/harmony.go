@@ -801,6 +801,9 @@ func updateMintCnt(parentBlockTime, currentBlockTime uint64, validator common.Ad
 
 // 这里校验vote的几个错误
 func (h *Harmony) ValidateTx(tx *types.Transaction, from common.Address) error {
+	if tx.To() == nil {
+		return nil
+	}
 	to := *tx.To()
 	//1.成为或退出候选人，需要判断to==form
 	if tx.Type() >= types.CandidateTxType && tx.Type() <= types.UnCandidateTxType {

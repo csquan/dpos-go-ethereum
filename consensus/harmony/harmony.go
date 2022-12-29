@@ -213,9 +213,9 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
-	//if err := h.VerifySeal(chain, header); err != nil {
-	//	return ErrMismatchSignerAndValidator
-	//}
+	if err := h.VerifySeal(chain, header); err != nil {
+		return ErrMismatchSignerAndValidator
+	}
 
 	var parent *types.Header
 	if len(parents) > 0 {
@@ -262,7 +262,7 @@ func (h *Harmony) VerifyUncles(chain consensus.ChainReader, block *types.Block) 
 
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
-func (h *Harmony) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
+func (h *Harmony) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
 	return h.verifySeal(chain, header, nil)
 }
 
@@ -278,7 +278,7 @@ func (h *Harmony) verifyBlockSeal(chain consensus.ChainHeaderReader, header *typ
 	return h.updateConfirmedBlockHeader(chain)
 }
 
-func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, headers []*types.Header) error {
+func (h *Harmony) verifySeal(chain consensus.ChainHeaderReader, header *types.Header, headers []*types.Header) error {
 	// Verifying the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {

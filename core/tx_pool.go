@@ -302,7 +302,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		initDoneCh:      make(chan struct{}),
-		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+		gasPrice:        new(big.Int).SetUint64(0), //new(big.Int).SetUint64(config.PriceLimit),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -447,7 +447,8 @@ func (pool *TxPool) GasPrice() *big.Int {
 // SetGasPrice updates the minimum price required by the transaction pool for a
 // new transaction, and drops all transactions below this threshold.
 func (pool *TxPool) SetGasPrice(price *big.Int) {
-	pool.mu.Lock()
+	//暂时屏蔽修改gasprice的方法，默认为0，避免节点随意更改gasprice导致无法接收gasprice为0的交易
+	/*pool.mu.Lock()
 	defer pool.mu.Unlock()
 
 	old := pool.gasPrice
@@ -463,6 +464,7 @@ func (pool *TxPool) SetGasPrice(price *big.Int) {
 	}
 
 	log.Info("Transaction pool price threshold updated", "price", price)
+	*/
 }
 
 // Nonce returns the next nonce of an account, with all transactions executable
@@ -655,7 +657,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if name.String() == "" {
 			return ErrInvalidJsonProposal
 		}
-		if name.String() != "frontierBlockReward" && name.String() != "proposalValidEpochCnt" {
+		if name.String() != "frontierBlockReward" && name.String() != "proposalValidEpochCnt" && name.String() != "zeroBaseFee" {
 			return ErrInvalidDataProposal
 		}
 		fmt.Printf("%s", name)

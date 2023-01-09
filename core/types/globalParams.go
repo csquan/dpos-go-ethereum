@@ -27,6 +27,7 @@ import (
 type GlobalParams struct {
 	FrontierBlockReward   *big.Int "json:frontierBlockReward"   //出块奖励
 	ProposalValidEpochCnt uint64   "json:proposalValidEpochCnt" //提案有效期
+	ZeroBaseFee           bool     "json:zeroBaseFee"           //0⃣️gas费
 
 	//有效提案
 	ValidProposals map[string]common.Hash "json:validProposals" //id->hash
@@ -50,6 +51,7 @@ var (
 func (g *GlobalParams) InitParams() {
 	g.FrontierBlockReward = big.NewInt(5e+18)
 	g.ProposalValidEpochCnt = 2
+	g.ZeroBaseFee = false
 
 	g.ValidProposals = make(map[string]common.Hash)        //id->hash
 	g.ProposalApproves = make(map[string][]common.Address) //id->address
@@ -94,6 +96,13 @@ func (g *GlobalParams) ApplyProposals(id string, proposalTx *Transaction, thresh
 			log.Info("modify params", " name:", name.String(), " value:", value.String())
 			g.ProposalValidEpochCnt = uint64(value.Int())
 
+			//将ID在ValidProposals中删除，同时移动到InValidProposals中
+			g.InValidProposals[id] = g.ValidProposals[id]
+			delete(g.ValidProposals, id)
+			return nil
+		} else if name.String() == "zeroBaseFee" {
+			log.Info("modify params", " name:", name.String(), " value:", value)
+			g.ZeroBaseFee = value.Bool()
 			//将ID在ValidProposals中删除，同时移动到InValidProposals中
 			g.InValidProposals[id] = g.ValidProposals[id]
 			delete(g.ValidProposals, id)

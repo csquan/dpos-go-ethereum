@@ -17,8 +17,10 @@
 package miner
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/rawdb"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -874,7 +876,26 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 		header.MixDigest = genParams.random
 	}
 	// Set baseFee and GasLimit if we are on an EIP-1559 chain
-	header.BaseFee = misc.CalcBaseFee(parent.Header())
+	if ha, ok := w.engine.(*harmony.Harmony); ok {
+		s := types.GlobalParams{}
+		g := rawdb.ReadParams(ha.GetDB())
+		err := json.Unmarshal(g, &s)
+		if err != nil {
+			header.BaseFee = misc.CalcBaseFee(parent.Header())
+			log.Error("Unmarshal,", "err", err)
+		} else if s.ZeroBaseFee {
+			header.BaseFee = big.NewInt(0)
+		} else {
+			header.BaseFee = misc.CalcBaseFee(parent.Header())
+			if header.BaseFee.Cmp(big.NewInt(0)) <= 0 { //非0basefee提案生效以后，第一次由basefee 0 改为非0时，由于parent.BaseFee==0,所以动态计算的basefee也为0，需要特殊处理一下
+				header.BaseFee = big.NewInt(params.InitialBaseFee)
+			}
+		}
+
+	} else {
+		header.BaseFee = misc.CalcBaseFee(parent.Header())
+	}
+
 	// Run the consensus preparation with the default or customized consensus engine.
 	if err := w.engine.Prepare(w.chain, header); err != nil {
 		log.Error("Failed to prepare header for sealing", "err", err)

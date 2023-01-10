@@ -17,6 +17,8 @@
 package core
 
 import (
+	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -32,6 +34,9 @@ type Validator interface {
 	// ValidateState validates the given statedb and optionally the receipts and
 	// gas used.
 	ValidateState(block *types.Block, state *state.StateDB, receipts types.Receipts, usedGas uint64) error
+
+	// ValidateValidator validate the block validator.
+	ValidateValidator(chain consensus.ChainHeaderReader, h *harmony.Harmony, header *types.Header) error
 }
 
 // Prefetcher is an interface for pre-caching transaction signatures and state.

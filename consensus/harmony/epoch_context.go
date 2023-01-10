@@ -133,7 +133,7 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 	return nil
 }
 
-func (ec *EpochContext) lookupValidator(now uint64) (validator common.Address, err error) {
+func (ec *EpochContext) LookupValidator(now uint64) (validator common.Address, err error) {
 	offset := now % epochInterval
 	if offset%blockInterval != 0 {
 		return common.Address{}, ErrInvalidMintBlockTime

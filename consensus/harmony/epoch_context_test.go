@@ -73,12 +73,12 @@ func TestLookupValidator(t *testing.T) {
 	}
 	mockEpochContext.Context.SetValidators(validators)
 	for i, expected := range validators {
-		got, _ := mockEpochContext.lookupValidator(uint64(i) * blockInterval)
+		got, _ := mockEpochContext.LookupValidator(uint64(i) * blockInterval)
 		if got != expected {
 			t.Errorf("Failed to test lookup validator, %s was expected but got %s", expected.String(), got.String())
 		}
 	}
-	_, err = mockEpochContext.lookupValidator(blockInterval - 1)
+	_, err = mockEpochContext.LookupValidator(blockInterval - 1)
 	if err != ErrInvalidMintBlockTime {
 		t.Errorf("Failed to test lookup validator. err '%v' was expected but got '%v'", ErrInvalidMintBlockTime, err)
 	}

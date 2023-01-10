@@ -135,9 +135,25 @@ func (ec *EpochContext) kickOutValidator(epoch uint64) error {
 
 func (ec *EpochContext) lookupValidator(now uint64) (validator common.Address, err error) {
 	offset := now % epochInterval
-	if offset%blockInterval != 0 {
-		return common.Address{}, ErrInvalidMintBlockTime
+	//if offset%blockInterval != 0 {
+	//	return common.Address{}, ErrInvalidMintBlockTime
+	//}
+	offset /= blockInterval
+
+	validators, err := ec.Context.GetValidators()
+	if err != nil {
+		return common.Address{}, err
 	}
+	validatorSize := len(validators)
+	if validatorSize == 0 {
+		return common.Address{}, errors.New("failed to lookup validator")
+	}
+	offset %= uint64(validatorSize)
+	return validators[offset], nil
+}
+
+func (ec *EpochContext) getValidator(now uint64) (validator common.Address, err error) {
+	offset := now % epochInterval
 	offset /= blockInterval
 
 	validators, err := ec.Context.GetValidators()

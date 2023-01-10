@@ -13,8 +13,6 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-var ErrDelegateInvalid = errors.New("delegatorAddr is in validators and invalid,please unstake first")
-
 type Trie struct {
 	t *trie.Trie
 	d *trie.Database
@@ -91,7 +89,6 @@ func newVoteTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
 	return newTrie(ownerVote, root, edb)
 }
 
-// 暴露给接口使用
 func NewVoteTrie(root common.Hash, edb ethdb.KeyValueStore) (*Trie, error) {
 	return newTrie(ownerVote, root, edb)
 }

@@ -213,9 +213,6 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	if header.UncleHash != uncleHash {
 		return errInvalidUncleHash
 	}
-	if err := h.VerifySeal(chain, header); err != nil {
-		return ErrMismatchSignerAndValidator
-	}
 
 	var parent *types.Header
 	if len(parents) > 0 {
@@ -228,6 +225,10 @@ func (h *Harmony) verifyHeader(chain consensus.ChainHeaderReader, header *types.
 	}
 	if parent.Time+blockInterval > header.Time+1 {
 		return ErrInvalidTimestamp
+	}
+
+	if err := h.VerifySeal(chain, header, parents); err != nil {
+		return ErrMismatchSignerAndValidator
 	}
 
 	//verify signer
@@ -262,8 +263,8 @@ func (h *Harmony) VerifyUncles(chain consensus.ChainReader, block *types.Block) 
 
 // VerifySeal implements consensus.Engine, checking whether the signature contained
 // in the header satisfies the consensus protocol requirements.
-func (h *Harmony) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header) error {
-	return h.verifySeal(chain, header, nil)
+func (h *Harmony) VerifySeal(chain consensus.ChainHeaderReader, header *types.Header, headers []*types.Header) error {
+	return h.verifySeal(chain, header, headers)
 }
 
 func (h *Harmony) verifyBlockSeal(chain consensus.ChainHeaderReader, header *types.Header, headers []*types.Header) error {
@@ -283,26 +284,32 @@ func (h *Harmony) verifySeal(chain consensus.ChainHeaderReader, header *types.He
 	number := header.Number.Uint64()
 	if number == 0 {
 		return errUnknownBlock
+	} else if number == 1 {
+		return nil
 	}
 	var prevHeader *types.Header
 	if len(headers) > 0 {
 		prevHeader = headers[len(headers)-1]
 	} else {
-		prevHeader = chain.GetHeaderByNumber(number - 1)
+		prevHeader = chain.GetHeader(header.ParentHash, number-1)
 	}
-	prevCtx, err := NewContextFromHash(h.ctx.EDB(), prevHeader.EngineInfo)
+	if prevHeader == nil {
+		fmt.Println("not verify seal @bn=", number)
+		return nil
+	}
+	prevCtx, err := NewContextFromHash(h.GetDB(), prevHeader.EngineInfo)
 	if err != nil {
 		return err
 	}
 	prevEpoch := &EpochContext{Context: prevCtx}
-	validator, err := prevEpoch.lookupValidator(header.Time)
+	validator, err := prevEpoch.getValidator(header.Time)
 	if err != nil {
 		return err
 	}
 	if err := h.verifyBlockSigner(validator, header); err != nil {
 		return err
 	}
-	return h.updateConfirmedBlockHeader(chain)
+	return nil
 }
 
 func (h *Harmony) verifyBlockSigner(validator common.Address, header *types.Header) error {
@@ -626,7 +633,7 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 	if err := h.checkDeadline(lastBlock, now); err != nil {
 		return err
 	}
-	lastCtx, err := NewContextFromHash(h.ctx.EDB(), lastBlock.Header().EngineInfo)
+	lastCtx, err := NewContextFromHash(h.GetDB(), lastBlock.Header().EngineInfo)
 	if err != nil {
 		return err
 	}
@@ -644,7 +651,7 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 	return nil
 }
 
-func HarmonyRLP(header *types.Header) []byte {
+func RlpHeader(header *types.Header) []byte {
 	b := new(bytes.Buffer)
 	encodeSigHeader(b, header)
 	return b.Bytes()
@@ -661,7 +668,7 @@ func (h *Harmony) Seal(chain consensus.ChainHeaderReader, block *types.Block, re
 	}
 
 	// time's up, sign the block
-	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, accounts.MimetypeHarmony, HarmonyRLP(header))
+	sealHash, err := h.signFn(accounts.Account{Address: h.signer}, accounts.MimetypeHarmony, RlpHeader(header))
 	if err != nil {
 		log.Error("signFn error", "err", err)
 		return nil

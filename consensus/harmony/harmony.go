@@ -82,6 +82,7 @@ var (
 	ErrTakeItEasy                 = errors.New("take it easy")
 	ErrNilBlockHeader             = errors.New("nil block header returned")
 	ErrNoCandidateAddr            = errors.New("no candidate address")
+	ErrEngine                     = errors.New("error engine")
 )
 var (
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
@@ -101,6 +102,9 @@ type Harmony struct {
 	GlobalParams         types.GlobalParams
 }
 
+func (h *Harmony) GetContext() *Context {
+	return h.ctx
+}
 func (h *Harmony) FinalizeAndAssemble(
 	chain consensus.ChainHeaderReader,
 	header *types.Header,
@@ -284,22 +288,7 @@ func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, 
 	if number == 0 {
 		return errUnknownBlock
 	}
-	var prevHeader *types.Header
-	if len(headers) > 0 {
-		prevHeader = headers[len(headers)-1]
-	} else {
-		prevHeader = chain.GetHeaderByNumber(number - 1)
-	}
-	prevCtx, err := NewContextFromHash(h.ctx.EDB(), prevHeader.EngineInfo)
-	if err != nil {
-		return err
-	}
-	prevEpoch := &EpochContext{Context: prevCtx}
-	validator, err := prevEpoch.lookupValidator(header.Time)
-	if err != nil {
-		return err
-	}
-	if err := h.verifyBlockSigner(validator, header); err != nil {
+	if err := h.verifyBlockSigner(header.Coinbase, header); err != nil {
 		return err
 	}
 	return h.updateConfirmedBlockHeader(chain)
@@ -631,7 +620,7 @@ func (h *Harmony) CheckValidator(lastBlock *types.Block, now uint64) error {
 		return err
 	}
 	lastEpochContext := &EpochContext{Context: lastCtx}
-	validator, err := lastEpochContext.lookupValidator(now)
+	validator, err := lastEpochContext.LookupValidator(now)
 	if err != nil {
 		return err
 	}

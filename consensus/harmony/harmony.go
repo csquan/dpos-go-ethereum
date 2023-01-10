@@ -73,16 +73,16 @@ var (
 
 	// ErrInvalidTimestamp is returned if the timestamp of a block is lower than
 	// the previous block's timestamp + the minimum block period.
-	ErrInvalidTimestamp           = errors.New("invalid timestamp")
-	ErrWaitForPrevBlock           = errors.New("wait for last block arrived")
-	ErrMintFutureBlock            = errors.New("mint the future block")
-	ErrMismatchSignerAndValidator = errors.New("mismatch block signer and validator")
-	ErrInvalidBlockValidator      = errors.New("not my turn")
-	ErrInvalidMintBlockTime       = errors.New("not mining time")
-	ErrTakeItEasy                 = errors.New("take it easy")
-	ErrNilBlockHeader             = errors.New("nil block header returned")
-	ErrNoCandidateAddr            = errors.New("no candidate address")
-	ErrEngine                     = errors.New("error engine")
+	ErrInvalidTimestamp      = errors.New("invalid timestamp")
+	ErrWaitForPrevBlock      = errors.New("wait for last block arrived")
+	ErrMintFutureBlock       = errors.New("mint the future block")
+	ErrInvalidSigner         = errors.New("invalid block signer")
+	ErrInvalidBlockValidator = errors.New("not my turn")
+	ErrInvalidMintBlockTime  = errors.New("not mining time")
+	ErrTakeItEasy            = errors.New("take it easy")
+	ErrNilBlockHeader        = errors.New("nil block header returned")
+	ErrNoCandidateAddr       = errors.New("no candidate address")
+	ErrEngine                = errors.New("error engine")
 )
 var (
 	uncleHash = types.CalcUncleHash(nil) // Always Keccak256(RLP([])) as uncles are meaningless outside of PoW.
@@ -288,22 +288,34 @@ func (h *Harmony) verifySeal(chain consensus.ChainReader, header *types.Header, 
 	if number == 0 {
 		return errUnknownBlock
 	}
-	if err := h.verifyBlockSigner(header.Coinbase, header); err != nil {
+	var prevHeader *types.Header
+	if len(headers) > 0 {
+		prevHeader = headers[len(headers)-1]
+	} else {
+		prevHeader = chain.GetHeaderByNumber(number - 1)
+	}
+	prevCtx, err := NewContextFromHash(h.ctx.EDB(), prevHeader.EngineInfo)
+	if err != nil {
+		return err
+	}
+	prevEpoch := &EpochContext{Context: prevCtx}
+	validator, err := prevEpoch.LookupValidator(header.Time)
+	if err != nil {
+		return err
+	}
+	if err := h.verifyBlockSigner(validator, header); err != nil {
 		return err
 	}
 	return h.updateConfirmedBlockHeader(chain)
 }
 
-func (h *Harmony) verifyBlockSigner(validator common.Address, header *types.Header) error {
+func (h *Harmony) verifyBlockSigner(addr common.Address, header *types.Header) error {
 	signer, err := ecRecover(header, h.signatures)
 	if err != nil {
 		return err
 	}
-	if !bytes.Equal(signer.Bytes(), validator.Bytes()) {
-		return ErrInvalidBlockValidator
-	}
-	if !bytes.Equal(signer.Bytes(), header.Coinbase.Bytes()) {
-		return ErrMismatchSignerAndValidator
+	if !bytes.Equal(signer.Bytes(), addr.Bytes()) {
+		return ErrInvalidSigner
 	}
 	return nil
 }

@@ -887,7 +887,8 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 			header.BaseFee = big.NewInt(0)
 		} else {
 			header.BaseFee = misc.CalcBaseFee(parent.Header())
-			if header.BaseFee.Cmp(big.NewInt(0)) <= 0 { //非0basefee提案生效以后，第一次由basefee 0 改为非0时，由于parent.BaseFee==0,所以动态计算的basefee也为0，需要特殊处理一下
+			//非0basefee提案生效以后，第一次由basefee 0 改为非0时，由于parent.BaseFee==0,所以动态计算的basefee也为0，需要特殊处理一下
+			if header.BaseFee.Cmp(big.NewInt(0)) <= 0 {
 				header.BaseFee = big.NewInt(params.InitialBaseFee)
 			}
 		}

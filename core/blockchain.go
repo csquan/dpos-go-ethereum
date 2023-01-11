@@ -20,6 +20,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"io"
 	"math/big"
 	"sort"
@@ -1693,8 +1694,18 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals, setHead bool)
 
 		blockExecutionTimer.Update(time.Since(substart) - trieproc - triehash)
 
-		// Validate the state using the default validator
 		substart = time.Now()
+		// 校验出块节点是否是对应的验证人节点
+		if engine, ok := bc.engine.(*harmony.Harmony); ok {
+			err := bc.validator.ValidateValidator(bc, engine, block.Header())
+			if err != nil {
+				return it.index, err
+			}
+		} else {
+			return it.index, harmony.ErrEngine
+		}
+
+		// Validate the state using the default validator
 		if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
 			bc.reportBlock(block, receipts, err)
 			atomic.StoreUint32(&followupInterrupt, 1)

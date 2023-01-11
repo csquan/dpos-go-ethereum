@@ -17,9 +17,11 @@
 package core
 
 import (
+	"bytes"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/consensus"
+	"github.com/ethereum/go-ethereum/consensus/harmony"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/params"
@@ -98,6 +100,34 @@ func (v *BlockValidator) ValidateState(block *types.Block, statedb *state.StateD
 	// an error if they don't match.
 	if root := statedb.IntermediateRoot(true); header.Root != root {
 		return fmt.Errorf("invalid merkle root (remote: %x local: %x)", header.Root, root)
+	}
+	return nil
+}
+
+// ValidateValidator validates the given block's validator
+// parent's trie are assumed to be already
+// validated at this point.
+func (v *BlockValidator) ValidateValidator(chain consensus.ChainHeaderReader, h *harmony.Harmony, header *types.Header) error {
+	number := header.Number.Uint64()
+	if number == 0 {
+		return consensus.ErrInvalidNumber
+	}
+	var prevHeader *types.Header
+	prevHeader = chain.GetHeaderByNumber(number - 1)
+	if prevHeader == nil || prevHeader.Number.Uint64() != number-1 || prevHeader.Hash() != header.ParentHash {
+		return consensus.ErrUnknownAncestor
+	}
+	prevCtx, err := harmony.NewContextFromHash(h.GetContext().EDB(), prevHeader.EngineInfo)
+	if err != nil {
+		return err
+	}
+	prevEpoch := &harmony.EpochContext{Context: prevCtx}
+	validator, err := prevEpoch.LookupValidator(header.Time)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(header.Coinbase.Bytes(), validator.Bytes()) {
+		return harmony.ErrInvalidBlockValidator
 	}
 	return nil
 }

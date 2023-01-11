@@ -982,13 +982,14 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	}
 
 	env := work.copy()
-	if err := w.checkValidator(); err == nil {
+	if time, err := w.checkValidator(); err == nil {
 		// Create an empty block based on temporary copied state for
 		// sealing in advance without waiting block execution finished.
 		// if !noempty && atomic.LoadUint32(&w.noempty) == 0 {
 		// 	w.commit(work.copy(), nil, false, start)
 		// }
-
+		//更新区块header时间为校验时的时间
+		work.header.Time = time
 		// Fill pending transactions from the txpool
 		err = w.fillTransactions(interrupt, work)
 		if errors.Is(err, errBlockInterruptedByNewHead) {
@@ -1008,9 +1009,10 @@ func (w *worker) commitWork(interrupt *int32, noempty bool, timestamp int64) {
 	w.current = work
 }
 
-func (w *worker) checkValidator() error {
+func (w *worker) checkValidator() (uint64, error) {
+	now := uint64(time.Now().Unix())
 	if engine, ok := w.engine.(*harmony.Harmony); ok {
-		if err := engine.CheckValidator(w.chain.CurrentBlock(), uint64(time.Now().Unix())); err != nil {
+		if err := engine.CheckValidator(w.chain.CurrentBlock(), now); err != nil {
 			switch err {
 			case harmony.ErrWaitForPrevBlock,
 				harmony.ErrMintFutureBlock,
@@ -1022,10 +1024,10 @@ func (w *worker) checkValidator() error {
 			default:
 				log.Error("Failed to mint the block", "err", err)
 			}
-			return err
+			return now, err
 		}
 	}
-	return nil
+	return now, nil
 }
 
 // commit runs any post-transaction state modifications, assembles the final block
